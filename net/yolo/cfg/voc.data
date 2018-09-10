@@ -1,0 +1,5 @@
+classes= 20
+train  = /home/theppsh/workspace/data/voc/train.txt
+valid  = /home/theppsh/workspace/data/voc/2007_test.txt
+names = data/voc.names
+backup = /home/theppsh/workspace/data/voc/backup
