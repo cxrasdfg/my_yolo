@@ -8,36 +8,18 @@ class CFG():
 
     weights_dir='./weights/'
 
-    caffe_model="./models/vgg16_caffe_pretrain.pth"
-    use_caffe=True
+    # loc_mean=[.0,.0,.0,.0]
+    # loc_std=[.1,.1,.2,.2]
 
-    loc_mean=[.0,.0,.0,.0]
-    loc_std=[.1,.1,.2,.2]
+    # use_batchnorm=False
 
-    use_batchnorm=False
-
-    intput_wh=300
-
-    smin=.2
-    smax=.9
-
-    # aspect ratio
-    ar=[[1,2],[1,2,3],[1,2,3],[1,2,3],[1,2],[1,2]]
-    # about the net
-    feat_map=[38,19,10,5,3,1] # h equals to w
-    # feat_map=[37,18,9,5,3,1] # h equals to w
-    det_in_channels=[512,1024,512,256,256,256]
-    steps = [8, 16, 32, 64, 100, 300]
-
-    l2norm_scale=20
+    # intput_wh=300
 
     rand_seed=1234567
 
     batch_size=32
     num_worker=8
     
-    clip=True
-    freeze_top=False
     data_aug=True
     neg_ratio=3.0
     alpha=1.

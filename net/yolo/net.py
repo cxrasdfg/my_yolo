@@ -2,7 +2,9 @@
 
 import torch.nn.functional as F
 import torch.nn as nn
+import numpy as np
 from .net_tool import *
+from .module import Conv2dLocal
 from collections import OrderedDict
 
 def ParserCfg(cfg_path):
@@ -48,6 +50,30 @@ def ParserCfg(cfg_path):
             blocks.append(block)
             block=dict()
             block['type']='upsample'
+
+        elif line.startswith('[connected]'):
+            blocks.append(block)
+            block=dict()
+            block['type']='connected'
+        
+        elif line.startswith('[dropout]'):
+            blocks.append(block)
+            block=dict()
+            block['type']='dropout'
+        
+        elif line.startwith('[maxpool]'):
+            blocks.append(block)
+            block={}
+            block['type']='maxpool'
+        
+        elif line.startswith('[local]'):
+            blocks.append(block)
+            block={}
+            block['type']='local'
+        elif line.startswith('[detection]'):
+            blocks.append(block)
+            block={}
+            block['type']='detection'
 
         elif line.find('=') == -1:
             raise  Exception(' File "%s", line:%d\nInvalid expression'%(cfg_path,num+1))
@@ -154,6 +180,48 @@ class YoloLayer(torch.nn.Module):
         return x
 
 
+class DetectionLayer(torch.nn.Module):
+    def __init__(self,classes,
+        coords,
+        rescore,
+        side,
+        num,
+        softmax,
+        sqrt,
+        jitter,
+        object_scale,
+        noobject_scale,
+        class_scale,
+        coord_scale):
+        
+        super(DetectionLayer,self).__init__()
+        
+        self.coords,\
+        self.rescore,\
+        self.side,\
+        self.num,\
+        self.softmax,\
+        self.sqrt,\
+        self.jitter,\
+        self.object_scale,\
+        self.noobject_scale,\
+        self.class_scale,\
+        self.coord_scale=\
+        coords,
+        rescore,
+        side,
+        num,
+        softmax,
+        sqrt,
+        jitter,
+        object_scale,
+        noobject_scale,
+        class_scale,
+        coord_scale
+        
+    def forward(self,x):
+        raise NotImplementedError()
+
 class Conv2D(nn.Module):
     def __init__(self,input_channel,output_channel,
                  size,stride,same_padding,bn,activation):
@@ -181,6 +249,28 @@ class Conv2D(nn.Module):
             x=self.act(x)
         return x
 
+class Linear(nn.Module):
+    def __init__(self,in_features,out_features,act,bn=False):
+        super(Linear,self).__init__()
+        self.lin=torch.nn.Linear(in_features,out_features,bias=not bn)
+        
+        self.bn=torch.nn.BatchNorm2d(out_features) if bn else None
+
+        if act == 'linear':
+            self.act=None
+        elif act=='leaky':
+            self.act=nn.LeakyReLU(0.1,inplace=True)
+        else:
+            raise ValueError('attr::`act` must be `linear` or `leaky`')
+    
+    def forward(self,x):
+        x=self.lin(x)
+        if self.bn:
+            x=self.bn(x)
+        if self.act:
+            x=self.act(x)
+        return x
+
 class RouteLayer(nn.Module):
     """
     this layer is just a placeholder,
@@ -190,6 +280,7 @@ class RouteLayer(nn.Module):
         super(RouteLayer, self).__init__()
         self.route_layers=route_layers
 
+    @DeprecationWarning
     def forward(self, x):
         raise ValueError('the function forward in this module has been deprecated')
 
@@ -268,9 +359,18 @@ class Darknet(nn.Module):
         # print(self.layers)
 
     def create_net(self):
+        def cal_hw(im_size,kernel,stride,pad):
+            padding=int(kernel-1)//2 if pad else 0
+            return (im_size+2*padding-kernel)//stride+1
+        
         idx=0
         LOC=[] # Layer Output Channel
+        hwlist=[] # stores the height and width of feature map
+        hwlist.append((self.net_height,self,net_width))
+
         layers=[]
+        first_connected=True
+
         for block in self.blocks:
             # print(block)
             bType=block['type']
@@ -315,10 +415,97 @@ class Darknet(nn.Module):
                 if block.get('batch_normalize') is not None:
                     if block['batch_normalize'] == '1':
                         bn=True
+                _kernel=int(block['size'])
+                _stride=int(block['stride'])
+                _pad=int(block['pad'])
                 layers.append(['Conv%d'%(len(layers)),
-                               Conv2D(LOC[-1],out_channels,int(block['size']),
-                       int(block['stride']),int(block['pad']),bn,block['activation'])])
+                               Conv2D(LOC[-1],out_channels,_kernel,
+                       _stride,_pad,bn,block['activation'])])
+                
                 LOC.append(out_channels)
+
+                # append feature map size
+                ch,cw=hwlist[-1]
+                ch=cal_hw(ch,_kernel,_stride,_pad)
+                cw=cal_hw(cw,_kernel,_stride,_pad)
+                hwlist.append((ch,cw))
+
+            elif bType=='connected':
+                if first_connected:
+                    first_connected=False
+                    in_features= hwlist[-1][0]*\
+                        hwlist[-1][1]*\
+                        out_channels[-1]
+                else:
+                    in_features=out_channels[-1]
+                out_features=int(block['output'])
+                bn=False
+                if block.get('batch_normalize') is not None:
+                    if block['batch_normalize'] == '1':
+                        bn=True
+                layers.append(['Linear%d'%(len(layers)),Linear(
+                    in_features,out_features,act=block['activation'],bn=bn) ])
+                LOC.append(out_features)
+            
+            elif bType=='maxpool':
+                _size=int(block['size'])
+                _stride=int(block['stride'])
+                layers.append(['Maxpool%d'%(len(layers)),torch.nn.MaxPool2d(_size,_stride)])
+                LOC.append(LOC[-1])
+
+                ch,cw=hwlist[-1]
+                ch=cal_hw(ch,_size,_stride,pad=False)
+                cw=cal_hw(cw,_size,_stride,pad=False)
+                hwlist.append((ch,cw))
+
+            elif bType=='local':
+                _size=int(block['size'])
+                _stride=int(block['stride'])
+                _pad=int(block['pad'])
+                _filters=int(block['filters'])
+                _activation=int(block['activation'])
+                
+                padding=int(_size-1)//2 if _pad else 0
+                ch,cw=hwlist[-1]
+                layers.append(['Local%d'%len(layers),
+                    Conv2dLocal(ch,cw,LOC[-1],_filters,_size,_stride,padding)])
+
+                LOC.append(_filters)
+
+                ch=cal_hw(ch,_size,_stride,_pad)
+                cw=cal_hw(cw,_size,_stride,_pad)
+                hwlist.append((ch,cw))
+            
+            elif bType=='detection':
+                classes=int(block['classes'])
+                coords=int(block['coords'])
+                rescore=int(block['rescore'])
+                side=int(block['side'])
+                num=int(block['num'])
+                softmax=int(block['softmax'])
+                sqrt=int(block['sqrt'])
+                jitter=float(block['jitter'])
+
+                object_scale=int(block['object_scale'])
+                noobject_scale=float(block['noobject_scale'])
+                class_scale=int(block['class_scale'])
+                coord_scale=int(block['coord_scale'])
+
+                assert LOC[-1]==side*side*(num*(coords+rescore)+classes)
+                
+                layers.append(['Detection%d'%(len(layers)),
+                    DetectionLayer(
+                        classes,coords,rescore,
+                        side,num,softmax,sqrt,jitter,
+                        object_scale,noobject_scale,class_scale,coord_scale)])
+
+                LOC.append('detection pos')
+
+            elif bType=='dropout':
+                probability=float(block['probability'])
+                layers.append(['Dropout%d'%(len(layers)),torch.nn.Dropout(probability)])
+                LOC.append(LOC[-1])
+
             elif bType=='shortcut':
                 sFrom=int(block['from'])
                 assert sFrom<0
@@ -346,7 +533,7 @@ class Darknet(nn.Module):
 
                 layers.append(['Upsample%d'%(len(layers)),UpsampleLayer()])
                 LOC.append(LOC[-1])
-
+            
             elif bType=='yolo':
                 mask=[]
                 for n in block['mask'].split(','):
@@ -369,24 +556,49 @@ class Darknet(nn.Module):
                                          num,jitter,ignore_thresh,
                                          truth_thresh,random)])
                 LOC.append('yolo pos')
+
         self.layers=nn.Sequential(OrderedDict(layers))
 
     def forward(self,x):
         output=[]  # save the reference for the output of corresponding layer
         res=[]
         idx=0
+        first_connected=True
         for name,module in self.layers.named_children():
             if name.startswith('Conv'):
-                if idx==85:
-                    print(idx)
+                # if idx==85:
+                #     print(idx)
                 x=module(x)
                 output.append(x)
+
+            elif name.startwith('Linear'):
+                if first_connected:
+                    first_connected=False
+                    b,_,_,_=x.shape
+                    x=x.view(b,-1)
+                
+                x=module(x)
+                output.append(x)
+            
+            elif name.startwith('Maxpool'):
+                x=module(x)
+                output.append(x)
+
+            elif name.startswith('Local'):
+                x=module(x)
+                output.append(x)
+
+            elif name.startwith('Dropout'):
+                x=module(x)
+                output.append(x)
+
             elif name.startswith('Shortcut'):
                 last_x=output[module.from_index]
                 x=x+last_x
                 if module.act != 'linear':
                     assert 0
                 output.append(x)
+            
             elif name.startswith('Route'):
                 x=None
                 for route_layer in module.route_layers:
@@ -408,40 +620,21 @@ class Darknet(nn.Module):
                 x=module(x,self.net_height,self.net_width)
                 output.append('yolo output,just for taking a place')
                 res.append(x)
+            
+            elif name.startswith('Detection'):
+                x=module(x)
+                output.append('detection output, take a place')
+                res.append(x)
+                
             else:
                 raise ValueError('unrecognized layer...')
 
             idx+=1
         # for i,val in enumerate(output):
         #     torch.save(val,'./mine/%d'%(i))
+        if len(res) == 0:
+            res=output[-1]
         return res
-
-    # def cuda(self, device=None):
-    #     if self.is_cuda:
-    #         return self
-    #     super(Darknet, self).cuda(device)
-    #     layers=self.layers
-    #     for layer_i in range(len(layers)):
-    #         _,layer=layers[layer_i]
-    #         if isinstance(layer,nn.Module):
-    #             # layers[layer_i][1]=layer.cuda(device)
-    #             layer._apply(lambda t:t.cuda(device))
-    #     self.is_cuda=True
-    #
-    #     return self
-    #
-    # def cpu(self):
-    #     if not self.is_cuda:
-    #         return self
-    #     super(Darknet, self).cpu()
-    #     layers = self.layers
-    #     for layer_i in range(len(layers)):
-    #         _, layer = layers[layer_i]
-    #         if isinstance(layer, nn.Module):
-    #             # layers[layer_i][1] = layer.cpu()
-    #             layer._apply(lambda t: t.cpu())
-    #     self.is_cuda = False
-    #     return self
 
     def load_trained_weight(self,file_name):
         file=open(file_name,"rb+")
@@ -470,6 +663,35 @@ class Darknet(nn.Module):
                 num_w = layer.conv.weight.numel()
                 layer.conv.weight.data.copy_(torch.from_numpy(buffer[start:start + num_w]))
                 start = start + num_w
+
+            elif isinstance(layer,Linear):
+                if layer.bn is not None:
+                    num_b=layer.bn.bias.numel()
+                    layer.bn.bias.data.copy_(torch.from_numpy(buffer[start:start+num_b]))
+                    start=start + num_b
+                    
+                    num_w=layer.lin.weight.numel()
+                    layer.lin.weight.data.copy_(torch.from_numpy(buffer[start:start+num_w]))
+                    start = start + num_w
+
+                    layer.bn.weight.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                    start = start + num_b
+
+                    layer.bn.running_mean.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                    start = start + num_b
+                    
+                    layer.bn.running_var.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                    start = start + num_b
+                    
+                else:   
+                    num_b=layer.lin.bias.numel()
+                    layer.lin.bias.data.copy_(torch.from_numpy(buffer[start:start+num_b]))
+                    start = start +num_b
+
+                    num_w=layer.lin.weight.numel()
+                    layer.lin.weight.data.copy_(torch.from_numpy(buffer[start:start+num_w]))
+                    start = start + num_w
+
             else:
                 pass
 
