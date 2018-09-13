@@ -6,13 +6,21 @@ import torch.nn as nn
 
 import numpy as np
 from .net_tool import *
-from .module import Conv2dLocal
+from .layer import Conv2dLocalLayer,DetectionLayer,\
+    LinearLayer,RouteLayer,ShortcutLayer,\
+    UpsampleLayer,YoloLayer,Conv2dLayer
+
+from .parser import ParserCfg
 from collections import OrderedDict
 
 class Darknet(nn.Module):
     def __init__(self,cfgfile,weight_file=None):
-        if cfgfile.startswith('yolov3'):
-            raise ValueError('only support YoloV3')
+        # if not cfgfile.startswith('yolov3'):
+            # raise ValueError('only support YoloV3')
+        
+        if 'yolo' not in cfgfile:
+            raise ValueError('only support yolo...')
+
         super(Darknet, self).__init__()
         # self.net_property=None
         self.blocks=ParserCfg(cfgfile)
@@ -54,7 +62,6 @@ class Darknet(nn.Module):
         idx=0
         LOC=[] # Layer Output Channel
         hwlist=[] # stores the height and width of feature map
-        hwlist.append((self.net_height,self,net_width))
 
         layers=[]
         first_connected=True
@@ -75,13 +82,13 @@ class Darknet(nn.Module):
                 self.channels = int(block['channels'])
                 self.momentum = float(block['momentum'])
                 self.decay = float(block['decay'])
-                self.angle = float(block['angle'])
+                self.angle = float(block['angle']) if 'angle' in block else None
                 self.saturation = float(block['saturation'])
                 self.exposure = float(block['exposure'])
                 self.hue = float(block['hue'])
 
                 self.learning_rate = float(block['learning_rate'])
-                self.burn_in = int(block['burn_in'])
+                self.burn_in = int(block['burn_in']) if 'burn_in' in block else None
                 self.max_batches = int(block['max_batches'])
                 self.policy = block['policy']
 
@@ -95,6 +102,7 @@ class Darknet(nn.Module):
                     scales.append(float(t))
                 self.scales = scales
 
+                hwlist.append((self.net_height,self.net_width) )
                 LOC.append(int(block['channels']))
 
             elif bType=='convolutional':
@@ -107,15 +115,18 @@ class Darknet(nn.Module):
                 _stride=int(block['stride'])
                 _pad=int(block['pad'])
                 layers.append(['Conv%d'%(len(layers)),
-                               Conv2D(LOC[-1],out_channels,_kernel,
+                               Conv2dLayer(LOC[-1],out_channels,_kernel,
                        _stride,_pad,bn,block['activation'])])
                 
                 LOC.append(out_channels)
 
                 # append feature map size
                 ch,cw=hwlist[-1]
+                # print(block)
+
                 ch=cal_hw(ch,_kernel,_stride,_pad)
                 cw=cal_hw(cw,_kernel,_stride,_pad)
+                # print("%dx%d"%(ch,cw))
                 hwlist.append((ch,cw))
 
             elif bType=='connected':
@@ -123,15 +134,15 @@ class Darknet(nn.Module):
                     first_connected=False
                     in_features= hwlist[-1][0]*\
                         hwlist[-1][1]*\
-                        out_channels[-1]
+                        LOC[-1]
                 else:
-                    in_features=out_channels[-1]
+                    in_features=LOC[-1]
                 out_features=int(block['output'])
                 bn=False
                 if block.get('batch_normalize') is not None:
                     if block['batch_normalize'] == '1':
                         bn=True
-                layers.append(['Linear%d'%(len(layers)),Linear(
+                layers.append(['Linear%d'%(len(layers)),LinearLayer(
                     in_features,out_features,act=block['activation'],bn=bn) ])
                 LOC.append(out_features)
             
@@ -151,12 +162,12 @@ class Darknet(nn.Module):
                 _stride=int(block['stride'])
                 _pad=int(block['pad'])
                 _filters=int(block['filters'])
-                _activation=int(block['activation'])
+                _activation=block['activation']
                 
                 padding=int(_size-1)//2 if _pad else 0
                 ch,cw=hwlist[-1]
                 layers.append(['Local%d'%len(layers),
-                    Conv2dLocal(ch,cw,LOC[-1],_filters,_size,_stride,padding)])
+                    Conv2dLocalLayer(ch,cw,LOC[-1],_filters,_size,_stride,padding,act=_activation)])
 
                 LOC.append(_filters)
 
@@ -332,7 +343,7 @@ class Darknet(nn.Module):
         buffer=np.fromfile(file,dtype=np.float32)
         start=0
         for name,layer in self.layers.named_children():
-            if isinstance(layer,Conv2D):
+            if isinstance(layer,Conv2dLayer):
                 if layer.bn is not None:
                     num_b = layer.bn.bias.numel()
                     layer.bn.bias.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
@@ -352,7 +363,7 @@ class Darknet(nn.Module):
                 layer.conv.weight.data.copy_(torch.from_numpy(buffer[start:start + num_w]))
                 start = start + num_w
 
-            elif isinstance(layer,Linear):
+            elif isinstance(layer,LinearLayer):
                 if layer.bn is not None:
                     num_b=layer.bn.bias.numel()
                     layer.bn.bias.data.copy_(torch.from_numpy(buffer[start:start+num_b]))

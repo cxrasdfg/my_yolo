@@ -1,12 +1,19 @@
 from .local import Conv2dLocal as locally_layer
+from .detectionlayer import DetectionLayer
+from .linear import Linear as LinearLayer
+from .routelayer import RouteLayer
+from .shortcutlayer import ShortcutLayer
+from .upsamplelayer import UpsampleLayer
+from .yololayer import YoloLayer
+from .conv2d import Conv2D as Conv2dLayer
 
 import torch
 
-class Conv2dLocal(torch.nn.Module):
+class Conv2dLocalLayer(torch.nn.Module):
     def __init__(self,in_height, in_width, in_channels, out_channels,
                  kernel_size, stride=1, padding=0, bias=True, dilation=1,
                  act=None):
-        super(Conv2dLocal,self).__init__()
+        super(Conv2dLocalLayer,self).__init__()
         self.loc=locally_layer(in_height, in_width, in_channels, out_channels,
                  kernel_size, stride, padding, bias, dilation)
         if act=='linear':

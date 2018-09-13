@@ -56,7 +56,7 @@ def ParserCfg(cfg_path):
             block=dict()
             block['type']='dropout'
         
-        elif line.startwith('[maxpool]'):
+        elif line.startswith('[maxpool]'):
             blocks.append(block)
             block={}
             block['type']='maxpool'

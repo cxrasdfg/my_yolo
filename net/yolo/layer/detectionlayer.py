@@ -31,16 +31,16 @@ class DetectionLayer(torch.nn.Module):
         self.noobject_scale,\
         self.class_scale,\
         self.coord_scale=\
-        coords,
-        rescore,
-        side,
-        num,
-        softmax,
-        sqrt,
-        jitter,
-        object_scale,
-        noobject_scale,
-        class_scale,
+        coords,\
+        rescore,\
+        side,\
+        num,\
+        softmax,\
+        sqrt,\
+        jitter,\
+        object_scale,\
+        noobject_scale,\
+        class_scale,\
         coord_scale
         
     def forward(self,x):
