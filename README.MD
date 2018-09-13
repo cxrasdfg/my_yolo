@@ -1,6 +1,6 @@
 # my_ssd
 
-Simple implementation of YOLO(You only look at once).
+Simple implementation of YOLO(You only look at once). Still can't work now, to be continued...
 ____
 <!-- ## Example
 ![Image text](data/img/dog_res.png)
@@ -66,6 +66,8 @@ ____
     - [-] train on coco    
 
 ## References:
-+ [You Only Look Once: Unified, Real-Time Object Detection(Paper)](https://arxiv.org/abs/1512.02325)
-+ [marvis/pytorch-yolo3](https://github.com/marvis/pytorch-yolo3) 
++ [You Only Look Once: Unified, Real-Time Object Detection(Paper)](https://arxiv.org/abs/1506.02640)
++ [YOLO9000: Better, Faster, Stronger(Paper)](https://arxiv.org/abs/1612.08242)
++ [YOLOv3: An Incremental Improvement(Paper)](https://arxiv.org/abs/1804.02767)
 + [pjreddie/darknet](https://github.com/pjreddie/darknet)
++ [marvis/pytorch-yolo3](https://github.com/marvis/pytorch-yolo3) 
