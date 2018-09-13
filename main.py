@@ -144,11 +144,14 @@ def test_net():
     show_img(img_src,-1)
 
 if __name__ == '__main__':
-    m=Darknet('./net/yolo/cfg/yolo.cfg')
-    m._print()
+    # m=Darknet('./net/yolo/cfg/yolo.cfg')
+    # m.train()
+
+    # m._print()
+    # m(torch.randn([1,3,416,416]))
     
-    exit(0)
-    
+    # exit(0)
+
     if len(sys.argv)==1:
         opt='train'
     else:

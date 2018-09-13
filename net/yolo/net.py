@@ -321,6 +321,10 @@ class Darknet(nn.Module):
                 res.append(x)
             
             elif name.startswith('Detection'):
+                # print(output)
+                # for _ in output:
+                    # print(_.shape)
+
                 x=module(x)
                 output.append('detection output, take a place')
                 res.append(x)
