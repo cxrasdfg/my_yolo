@@ -3,118 +3,63 @@ import os
 import warnings
 import xml.etree.ElementTree as ET
 
-from chainercv.chainer_experimental.datasets.sliceable import GetterDataset
-from chainercv.datasets.voc import voc_utils
-from PIL import Image
+from torch.utils.data import Dataset
+import cv2
 
-def read_image(path):
-     f = Image.open(path)
-     img = f.convert('RGB')
-     return img
+class VOCDataset(Dataset):  
+    classes = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]    
 
+    def __init__(self,voc_root,list_name):
+        r"""
+        Args:
+            voc_root (str): the path of my voc data 
+            list_name (str): name of the list file, e.g. `train.txt`, 'test.txt'
+        
+        """
+        super(VOCDataset,self).__init__()
+        self._root=voc_root
+        self._list_name=list_name
+        self._img_list=[]
+        self._gt=[]
+        
+        # load the list
+        with open(self._root+'/'+self._list_name,encoding='utf-8') as list_file:
+            buffer=list_file.read()
+            buffer=buffer.split('\n')
+            for i in buffer:
+                temp=i.split(' ')
+                assert (len(temp)-1)% 5 ==0
+                if temp[0] == '':
+                    continue
+                self._img_list.append(temp[0])
+                del temp[0]
+                temp=np.array([int(_) if str.isdigit(_) else float(_)   for _ in temp],dtype='float32')
+                self._gt.append(temp.reshape([-1,5]))
 
-class VOCBboxDataset(GetterDataset):
+        assert len(self._gt) == len(self._img_list)            
+        # print(buffer)
 
-    """Bounding box dataset for PASCAL `VOC`_.
+    def __getitem__(self,idx):
+        r"""
+        Args:
+            idx(int): index of the sampled data
+        Return:
+            img (np.ndarray[float32]):  `RGB` format, pixel range[0,255]
+            boxes (np.ndarray[float32]): `xyxy` format, abstract coordinate
+            labels (np.ndarray[int]): from 0 to `cls_num-1`
+        """
+        img_path=self._root+'/'+ self._img_list[idx] # abosolute path
+        boxes=self._gt[idx]  # [N,5].(cls_id,xmin,ymin,xmax,ymax), float type.
+        boxes=boxes.copy() # copy to avoid the potential changes.. 
+        img=cv2.imread(img_path)
+        h,w,c=img.shape
+        # boxes[:,1:]=boxes[:,1:]/np.array([w,h,w,h]) # normalization   
 
-    .. _`VOC`: http://host.robots.ox.ac.uk/pascal/VOC/voc2012/
+        img=img[:,:,::-1] # convert bgr to rgb
+        img=img.astype('float32')
 
-    Args:
-        data_dir (string): Path to the root of the training data. If this is
-            :obj:`auto`, this class will automatically download data for you
-            under :obj:`$CHAINER_DATASET_ROOT/pfnet/chainercv/voc`.
-        split ({'train', 'val', 'trainval', 'test'}): Select a split of the
-            dataset. :obj:`test` split is only available for
-            2007 dataset.
-        year ({'2007', '2012'}): Use a dataset prepared for a challenge
-            held in :obj:`year`.
-        use_difficult (bool): If :obj:`True`, use images that are labeled as
-            difficult in the original annotation.
-        return_difficult (bool): If :obj:`True`, this dataset returns
-            a boolean array
-            that indicates whether bounding boxes are labeled as difficult
-            or not. The default value is :obj:`False`.
+        return img,boxes[:,1:],(boxes[:,0]).astype('int')
 
-    This dataset returns the following data.
-
-    .. csv-table::
-        :header: name, shape, dtype, format
-
-        :obj:`img`, ":math:`(3, H, W)`", :obj:`float32`, \
-        "RGB, :math:`[0, 255]`"
-        :obj:`bbox` [#voc_bbox_1]_, ":math:`(R, 4)`", :obj:`float32`, \
-        ":math:`(y_{min}, x_{min}, y_{max}, x_{max})`"
-        :obj:`label` [#voc_bbox_1]_, ":math:`(R,)`", :obj:`int32`, \
-        ":math:`[0, \#fg\_class - 1]`"
-        :obj:`difficult` (optional [#voc_bbox_2]_), ":math:`(R,)`", \
-        :obj:`bool`, --
-
-    .. [#voc_bbox_1] If :obj:`use_difficult = True`, \
-        :obj:`bbox` and :obj:`label` contain difficult instances.
-    .. [#voc_bbox_2] :obj:`difficult` is available \
-        if :obj:`return_difficult = True`.
-    """
-
-    def __init__(self, data_dir='auto', split='train', year='2012',
-                 use_difficult=False, return_difficult=False):
-        super(VOCBboxDataset, self).__init__()
-
-        if data_dir == 'auto' and year in ['2007', '2012']:
-            data_dir = voc_utils.get_voc(year, split)
-
-        if split not in ['train', 'trainval', 'val']:
-            if not (split == 'test' and year == '2007'):
-                warnings.warn(
-                    'please pick split from \'train\', \'trainval\', \'val\''
-                    'for 2012 dataset. For 2007 dataset, you can pick \'test\''
-                    ' in addition to the above mentioned splits.'
-                )
-        id_list_file = os.path.join(
-            data_dir, 'ImageSets/Main/{0}.txt'.format(split))
-
-        self.ids = [id_.strip() for id_ in open(id_list_file)]
-
-        self.data_dir = data_dir
-        self.use_difficult = use_difficult
-
-        self.add_getter('img', self._get_image)
-        self.add_getter(('bbox', 'label', 'difficult'), self._get_annotations)
-
-        if not return_difficult:
-            self.keys = ('img', 'bbox', 'label')
 
     def __len__(self):
-        return len(self.ids)
-
-    def _get_image(self, i):
-        id_ = self.ids[i]
-        img_path = os.path.join(self.data_dir, 'JPEGImages', id_ + '.jpg')
-        img = read_image(img_path)
-        return img
-
-    def _get_annotations(self, i):
-        id_ = self.ids[i]
-        anno = ET.parse(
-            os.path.join(self.data_dir, 'Annotations', id_ + '.xml'))
-        bbox = []
-        label = []
-        difficult = []
-        for obj in anno.findall('object'):
-            # when in not using difficult split, and the object is
-            # difficult, skipt it.
-            if not self.use_difficult and int(obj.find('difficult').text) == 1:
-                continue
-
-            difficult.append(int(obj.find('difficult').text))
-            bndbox_anno = obj.find('bndbox')
-            # subtract 1 to make pixel indexes 0-based
-            bbox.append([
-                int(bndbox_anno.find(tag).text) - 1
-                for tag in ('ymin', 'xmin', 'ymax', 'xmax')])
-            name = obj.find('name').text.lower().strip()
-            label.append(voc_utils.voc_bbox_label_names.index(name))
-        bbox = np.stack(bbox).astype(np.float32)
-        label = np.stack(label).astype(np.int32)
-        # When `use_difficult==False`, all elements in `difficult` are False.
-        difficult = np.array(difficult, dtype=np.bool)
-        return bbox, label, difficult
+        return len(self._img_list)
