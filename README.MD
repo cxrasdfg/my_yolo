@@ -67,4 +67,5 @@ ____
 
 ## References:
 + [You Only Look Once: Unified, Real-Time Object Detection(Paper)](https://arxiv.org/abs/1512.02325)
-+ [chenyuntc/dsod.pytorch](https://github.com/marvis/pytorch-yolo3) 
++ [marvis/pytorch-yolo3](https://github.com/marvis/pytorch-yolo3) 
++ [pjreddie/darknet](https://github.com/pjreddie/darknet)
