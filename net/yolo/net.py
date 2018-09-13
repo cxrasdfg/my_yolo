@@ -13,6 +13,10 @@ from .layer import Conv2dLocalLayer,DetectionLayer,\
 from .parser import ParserCfg
 from collections import OrderedDict
 
+def cal_hw(im_size,kernel,stride,pad):
+            padding=int(kernel-1)//2 if pad else 0
+            return (im_size+2*padding-kernel)//stride+1
+
 class Darknet(nn.Module):
     def __init__(self,cfgfile,weight_file=None):
         # if not cfgfile.startswith('yolov3'):
@@ -55,10 +59,6 @@ class Darknet(nn.Module):
         # print(self.layers)
 
     def create_net(self):
-        def cal_hw(im_size,kernel,stride,pad):
-            padding=int(kernel-1)//2 if pad else 0
-            return (im_size+2*padding-kernel)//stride+1
-        
         idx=0
         LOC=[] # Layer Output Channel
         hwlist=[] # stores the height and width of feature map
@@ -270,7 +270,7 @@ class Darknet(nn.Module):
                 x=module(x)
                 output.append(x)
 
-            elif name.startwith('Linear'):
+            elif name.startswith('Linear'):
                 if first_connected:
                     first_connected=False
                     b,_,_,_=x.shape
@@ -279,7 +279,7 @@ class Darknet(nn.Module):
                 x=module(x)
                 output.append(x)
             
-            elif name.startwith('Maxpool'):
+            elif name.startswith('Maxpool'):
                 x=module(x)
                 output.append(x)
 
@@ -287,7 +287,7 @@ class Darknet(nn.Module):
                 x=module(x)
                 output.append(x)
 
-            elif name.startwith('Dropout'):
+            elif name.startswith('Dropout'):
                 x=module(x)
                 output.append(x)
 
@@ -393,6 +393,155 @@ class Darknet(nn.Module):
 
             else:
                 pass
+    
+    def _print(self):
+        nh=self.net_height
+        nw=self.net_width
+        nc=self.channels
+
+        nf=1e100
+        layer_out=[]  # layer output
+        print("layer     filters    size              input                output")
+        for counter,(name,layer) in enumerate(self.layers.named_children()):
+            if name.startswith('Conv'):
+                out_channels=layer.conv.out_channels
+                kernel=layer.conv.kernel_size
+                stride=layer.conv.stride
+                assert stride[0] == stride[1]
+                stride=stride[0]
+                
+                assert nc==layer.conv.in_channels
+                new_nh=cal_hw(nh,kernel[0] ,stride,layer.conv.padding[0]!=0)
+                new_nw=cal_hw(nw,kernel[1],stride,layer.conv.padding[0]!=0)
+                print(\
+                    "%5d conv  %5d %2d x%2d /%2d  %4d x%4d x%4d   ->  %4d x%4d x%4d"
+                    %(counter,out_channels,kernel[0],kernel[1],stride,nw,nh,nc,new_nw,new_nh,out_channels)
+                    )
+                
+                nh=new_nh
+                nw=new_nw
+                nc=out_channels
+
+                layer_out.append((nw,nh,nc))
+
+            elif name.startswith('Linear'):
+                
+                print(\
+                    "%5d connected                            %4d  ->  %4d"
+                    %(counter,layer.lin.in_features,layer.lin.out_features)
+                )
+                nf=layer.lin.out_features
+
+                layer_out.append(nf)
+            
+            elif name.startswith('Maxpool'):
+                kernel=layer.kernel_size
+                stride=layer.stride
+                
+                new_nh=cal_hw(nh,kernel,stride,layer.padding!=0)
+                new_nw=cal_hw(nw,kernel,stride,layer.padding!=0)
+                print(\
+                    "%5d max          %d x %d / %d  %4d x%4d x%4d   ->  %4d x%4d x%4d"
+                    %(counter,kernel,kernel,stride,nw,nh,nc,new_nw,new_nh,nc)
+                )
+                nh=new_nh
+                nw=new_nw
+                
+                layer_out.append((nw,nh,nc))
+
+            elif name.startswith('Local'):
+                assert nc==layer.loc.in_channels
+                out_channels=layer.loc.out_channels
+
+                kernel=layer.loc.kernel_size
+                stride=layer.loc.stride
+                assert stride[0] == stride[1]
+                stride=stride[0]
+
+                new_nh=cal_hw(nh,kernel[0],stride,layer.loc.padding[0]!=0)
+                new_nw=cal_hw(nw,kernel[1],stride,layer.loc.padding[0]!=0)
+                print(\
+                    "%5d Local Layer: %d x %d x %d image, %d filters -> %d x %d x %d image"
+                    %(counter,nw,nh,nc,out_channels,new_nw,new_nh,out_channels)
+                )
+
+                nh=new_nh
+                nw=new_nw
+                nc=out_channels
+
+                layer_out.append((nw,nh,nc))
+
+            elif name.startswith('Dropout'):
+                
+                last_=layer_out[-1]
+                if len(last_)==3:
+                    nf=last_[0]*last_[1]*last_[2]
+                elif len(last_)==1:
+                    nf=last_
+                else:
+                    assert 0
+                print(\
+                    "%5d dropout       p = %.2f               %4d  ->  %4d"
+                    %(counter,layer.p,nf,nf)
+                )
+
+                layer_out.append(nf)
+
+
+            elif name.startswith('Shortcut'):
+                
+                nw,nh,nc=layer_out[-1]
+                print(\
+                    "%5d res  %3d                %4d x%4d x%4d   ->  %4d x%4d x%4d"
+                    %(counter,layer.from_index,nw,nh,nc,nw,nh,nc)
+                )
+                layer_out.append((nw,nh,nc))
+
+
+            elif name.startswith('Route'):
+                this_c=None
+                this_h=None
+                this_w=None
+                print("%5d route "%(counter),end='')
+                for idx in layer.route_layers:
+                    if this_c is None:
+                        this_w=layer_out[idx][0]  
+                        this_h=layer_out[idx][1]  
+                        this_c=layer_out[idx][2] 
+                    else:
+                        assert this_w==layer_out[idx][0]  
+                        assert this_h==layer_out[idx][1]
+                        this_c+=layer_out[idx][2] 
+                    print(idx,end="")
+                print()
+                
+                nw=this_w
+                nh=this_h
+                nc=this_c
+        
+                layer_out.append((nw,nh,nc))
+
+            elif name.startswith('Upsample'):
+                stride=layer.stride
+                new_nh=new_nh*stride
+                new_nw=new_nw*stride
+
+                print("%5d upsample           %2dx  %4d x%4d x%4d   ->  %4d x%4d x%4d"\
+                    %(counter,stride,nw,nh,nc,new_nw,new_nh,nc))
+                
+                nh=new_nh
+                nw=new_nw
+                
+                layer_out.append((nw,nh,nc))
+
+            elif name.startswith('Yolo'):
+                print('%5d yolo'%(counter))
+                layer_out.append('hold a place')
+            
+            elif name.startswith('Detection'):
+                print('%5d Detection Layer'%(counter))
+                layer_out.append('hold a place')
+            
 
 
 if __name__ == '__main__':
