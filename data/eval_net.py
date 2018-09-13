@@ -7,7 +7,7 @@ from chainercv.evaluations import eval_detection_voc as voc_eval
 from config import cfg
 import os
 import re
-from net import SSD as MyNet
+# from net import SSD as MyNet
 from tqdm import tqdm
 
 def get_check_point():
@@ -26,7 +26,7 @@ def get_check_point():
     return epoch,iteration,base_dir+w
 
 
-def eval_net(net=None,num=cfg.eval_number,shuffle=False):
+def eval_net(net,num=cfg.eval_number,shuffle=False):
     data_set=TestDataset()
     data_loader=DataLoader(data_set,batch_size=1,shuffle=shuffle,drop_last=False)
     
@@ -34,6 +34,7 @@ def eval_net(net=None,num=cfg.eval_number,shuffle=False):
     did=cfg.device_id
 
     if net is None:
+        assert 0
         classes=data_set.classes
         net=MyNet(len(classes)+1)
         _,_,last_time_model=get_check_point()

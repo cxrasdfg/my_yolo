@@ -8,7 +8,7 @@ from config import cfg
 from torch.utils.data import Dataset  
 import numpy as np
 
-from net.ssd.net_tool import calc_target_
+# from net.ssd.net_tool import calc_target_
 from tqdm import tqdm
 
 from .vocdataset import VOCBboxDataset

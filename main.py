@@ -10,8 +10,7 @@ np.random.seed(cfg.rand_seed)
 torch.manual_seed(cfg.rand_seed)
 torch.cuda.manual_seed(cfg.rand_seed)
 
-from net import YOLO
-from net.ssd.net_tool import get_default_boxes
+from net import Darknet
 from data import TrainDataset,\
     eval_net,get_check_point,\
     read_image,TestTransform,\
@@ -145,6 +144,11 @@ def test_net():
     show_img(img_src,-1)
 
 if __name__ == '__main__':
+    m=Darknet('./net/yolo/cfg/yolo.cfg')
+    m._print()
+    
+    exit(0)
+    
     if len(sys.argv)==1:
         opt='train'
     else:
