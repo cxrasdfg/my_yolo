@@ -53,8 +53,9 @@ def train():
         num_workers=cfg.num_worker
     )
     
-    for b_imgs,b_boxes,b_labels,b_real_box_num in tqdm(data_loader):
-        tqdm.write('%s %s %s'%(str(b_imgs.shape),str(b_imgs.max()),str(b_imgs.min())) )
+    # test the dataloader...
+    # for b_imgs,b_boxes,b_labels,b_real_box_num in tqdm(data_loader):
+        # tqdm.write('%s %s %s'%(str(b_imgs.shape),str(b_imgs.max()),str(b_imgs.min())) )
 
     exit(0)
     # NOTE: plus one, en?
@@ -148,13 +149,13 @@ def test_net():
     show_img(img_src,-1)
 
 if __name__ == '__main__':
-    # m=Darknet('./net/yolo/cfg/yolo.cfg')
-    # m.train()
+    m=Darknet('./net/yolo/cfg/yolo.cfg','./models/extraction.weights')
+    m.train()
 
-    # m._print()
+    m._print()
     # m(torch.randn([1,3,416,416]))
     
-    # exit(0)
+    exit(0)
 
     if len(sys.argv)==1:
         opt='train'

@@ -258,7 +258,13 @@ class Darknet(nn.Module):
 
         self.layers=nn.Sequential(OrderedDict(layers))
 
-    def forward(self,x):
+    def forward(self,*args):
+        if self.training:
+            x,b_fixed_boxes,\
+            b_fixed_labels,\
+            b_real_box_num=args
+        else:
+            raise NotImplementedError()
         output=[]  # save the reference for the output of corresponding layer
         res=[]
         idx=0
@@ -340,63 +346,85 @@ class Darknet(nn.Module):
         return res
 
     def load_trained_weight(self,file_name):
+        r"""This method will use the darknet pretrained weights...
+        Args:
+            file_name: name of the darknet weight file
+        """
         file=open(file_name,"rb+")
-        header=np.fromfile(file,dtype=np.int32,count=5)
-        del header
+        major=np.fromfile(file,dtype=np.int32,count=1)
+        minor=np.fromfile(file,dtype=np.int32,count=1)
+        revision=np.fromfile(file,dtype=np.int32,count=1)
+
+        if (major*10 + minor) >= 2 and major < 1000 and minor < 1000:
+            seen=np.fromfile(file,dtype=np.int64,count=1)
+        else:
+            seen=np.fromfile(file,dtype=np.int32,count=1)
+
+        transpose=(major > 1000) or (minor > 1000)
+
 
         buffer=np.fromfile(file,dtype=np.float32)
         start=0
-        for name,layer in self.layers.named_children():
-            if isinstance(layer,Conv2dLayer):
-                if layer.bn is not None:
-                    num_b = layer.bn.bias.numel()
-                    layer.bn.bias.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
-                    start = start + num_b
-                    layer.bn.weight.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
-                    start = start + num_b
-                    layer.bn.running_mean.copy_(torch.from_numpy(buffer[start:start + num_b]))
-                    start = start + num_b
-                    layer.bn.running_var.copy_(torch.from_numpy(buffer[start:start + num_b]))
-                    start = start + num_b
+        loaded_count=0
+        try:
+            for name,layer in self.layers.named_children():
+                if isinstance(layer,Conv2dLayer):
+                    if layer.bn is not None:
+                        num_b = layer.bn.bias.numel()
+                        layer.bn.bias.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                        start = start + num_b
+                        layer.bn.weight.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                        start = start + num_b
+                        layer.bn.running_mean.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                        start = start + num_b
+                        layer.bn.running_var.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                        start = start + num_b
+                    else:
+                        num_b=layer.conv.bias.numel()
+                        layer.conv.bias.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                        start = start + num_b
+
+                    num_w = layer.conv.weight.numel()
+                    # NOTE: does the memory is stacked by this way?
+                    layer.conv.weight.data.view(-1).copy_(torch.from_numpy(buffer[start:start + num_w]))
+                    start = start + num_w
+                    loaded_count+=1
+
+                elif isinstance(layer,LinearLayer):
+                    if layer.bn is not None:
+                        num_b=layer.bn.bias.numel()
+                        layer.bn.bias.data.copy_(torch.from_numpy(buffer[start:start+num_b]))
+                        start=start + num_b
+                        
+                        num_w=layer.lin.weight.numel()
+                        layer.lin.weight.data.view(-1).copy_(torch.from_numpy(buffer[start:start+num_w]))
+                        start = start + num_w
+
+                        layer.bn.weight.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                        start = start + num_b
+
+                        layer.bn.running_mean.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                        start = start + num_b
+                        
+                        layer.bn.running_var.copy_(torch.from_numpy(buffer[start:start + num_b]))
+                        start = start + num_b
+                        
+                    else:   
+                        num_b=layer.lin.bias.numel()
+                        layer.lin.bias.data.copy_(torch.from_numpy(buffer[start:start+num_b]))
+                        start = start +num_b
+
+                        num_w=layer.lin.weight.numel()
+                        layer.lin.weight.data.view(-1).copy_(torch.from_numpy(buffer[start:start+num_w]))
+                        start = start + num_w
+                    
+                    loaded_count+=1
+
                 else:
-                    num_b=layer.conv.bias.numel()
-                    layer.conv.bias.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
-                    start = start + num_b
-
-                num_w = layer.conv.weight.numel()
-                layer.conv.weight.data.copy_(torch.from_numpy(buffer[start:start + num_w]))
-                start = start + num_w
-
-            elif isinstance(layer,LinearLayer):
-                if layer.bn is not None:
-                    num_b=layer.bn.bias.numel()
-                    layer.bn.bias.data.copy_(torch.from_numpy(buffer[start:start+num_b]))
-                    start=start + num_b
-                    
-                    num_w=layer.lin.weight.numel()
-                    layer.lin.weight.data.copy_(torch.from_numpy(buffer[start:start+num_w]))
-                    start = start + num_w
-
-                    layer.bn.weight.data.copy_(torch.from_numpy(buffer[start:start + num_b]))
-                    start = start + num_b
-
-                    layer.bn.running_mean.copy_(torch.from_numpy(buffer[start:start + num_b]))
-                    start = start + num_b
-                    
-                    layer.bn.running_var.copy_(torch.from_numpy(buffer[start:start + num_b]))
-                    start = start + num_b
-                    
-                else:   
-                    num_b=layer.lin.bias.numel()
-                    layer.lin.bias.data.copy_(torch.from_numpy(buffer[start:start+num_b]))
-                    start = start +num_b
-
-                    num_w=layer.lin.weight.numel()
-                    layer.lin.weight.data.copy_(torch.from_numpy(buffer[start:start+num_w]))
-                    start = start + num_w
-
-            else:
-                pass
+                    pass
+        except RuntimeError:
+            pass
+        print("load pretrained weight: load %d layers" %(loaded_count) )
     
     def _print(self):
         nh=self.net_height
