@@ -33,17 +33,10 @@ def adjust_lr(opt,iters,lrs=cfg.lrs):
 
 
 def train():
-    cfg._print()
-   
-    # im=torch.randn([1,3,300,300])
-    # for loc,cls in net(im):
-        # print(loc.shape,cls.shape)
-    # for k,v in net.named_parameters():
-    #     print(k,v,v.shape)
-
-    # boxes=get_default_boxes()
-    # print(boxes.shape)
-    data_set=TrainDataset(416,416)
+    net=Darknet('./net/yolo/cfg/yolo.cfg','./models/extraction.weights')
+    net._print()
+    
+    data_set=TrainDataset(net.net_width,net.net_height)
 
     data_loader=DataLoader(
         data_set,
@@ -57,10 +50,6 @@ def train():
     # for b_imgs,b_boxes,b_labels,b_real_box_num in tqdm(data_loader):
         # tqdm.write('%s %s %s'%(str(b_imgs.shape),str(b_imgs.max()),str(b_imgs.min())) )
 
-    exit(0)
-    # NOTE: plus one, en?
-    net=SSD(len(data_set.classes)+1)
-    net._print()
     epoch,iteration,w_path=get_check_point()
     if w_path:
         model=torch.load(w_path)
@@ -77,13 +66,16 @@ def train():
     while epoch<cfg.epochs:
         
         # print('********\t EPOCH %d \t********' % (epoch))
-        for i,(imgs,targets,labels) in tqdm(enumerate(data_loader)):
+        for b_imgs,b_boxes,b_labels,b_real_box_num in tqdm(data_loader):
             if is_cuda:
-                imgs=imgs.cuda(did)
-                targets=targets.cuda(did)
-                labels=labels.cuda(did)
+                b_imgs=b_imgs.cuda(did)
+                b_boxes=b_boxes.cuda(did)
+                b_labels=b_labels.cuda(did)
+                b_real_box_num=b_real_box_num.cuda(did)
 
-            _loss=net.train_once(imgs,targets,labels)
+            _loss=net(b_imgs,b_boxes,b_labels,b_real_box_num)
+            _loss=net.opt_step(_loss)
+
             tqdm.write('Epoch:%d, iter:%d, loss:%.5f'%(epoch,iteration,_loss))
 
             iteration+=1
@@ -149,14 +141,6 @@ def test_net():
     show_img(img_src,-1)
 
 if __name__ == '__main__':
-    m=Darknet('./net/yolo/cfg/yolo.cfg','./models/extraction.weights')
-    m.train()
-
-    m._print()
-    # m(torch.randn([1,3,416,416]))
-    
-    exit(0)
-
     if len(sys.argv)==1:
         opt='train'
     else:

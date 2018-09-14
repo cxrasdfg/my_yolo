@@ -257,6 +257,20 @@ class Darknet(nn.Module):
                 LOC.append('yolo pos')
 
         self.layers=nn.Sequential(OrderedDict(layers))
+    
+    def get_optimizer(self):
+        raise NotImplementedError()
+    
+    def opt_step(self,loss):
+        r"""Use the loss to backward the net, 
+        then the optimizer will update the weights
+        which requires grad...
+        Args:
+            loss (tensor[float32])
+        Return:
+            loss (tensor[float32]): value of current loss...
+        """
+        raise NotImplementedError()
 
     def forward(self,*args):
         if self.training:
@@ -330,8 +344,12 @@ class Darknet(nn.Module):
                 # print(output)
                 # for _ in output:
                     # print(_.shape)
-
-                x=module(x)
+                if self.training:
+                    x=module(x,b_fixed_boxes,\
+                        b_fixed_labels,\
+                        b_real_box_num)
+                else:
+                    raise NotImplementedError()
                 output.append('detection output, take a place')
                 res.append(x)
                 

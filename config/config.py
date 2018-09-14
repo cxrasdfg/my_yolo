@@ -17,11 +17,11 @@ class CFG():
 
     rand_seed=1234567
 
-    batch_size=32
-    num_worker=8
+    batch_size=4
+    num_worker=4
     
     data_aug=True
-    neg_ratio=3.0
+
     alpha=1.
     sigma=1.
     epochs=416
