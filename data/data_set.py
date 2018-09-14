@@ -4,14 +4,13 @@ import torch
 import torchvision
 from chainercv.datasets.voc import voc_utils
 from torchvision import transforms
-from config import cfg
 from torch.utils.data import Dataset  
 import numpy as np
 
 # from net.ssd.net_tool import calc_target_
 from tqdm import tqdm
 
-from .vocdataset import VOCBboxDataset
+from .vocdataset import VOCDataset
 from .transforms import random_crop,random_distort,\
     random_flip,random_paste,random_paste,scale_jitter,\
     resize as resize_box
@@ -35,27 +34,28 @@ def torch_normalize(img):
 
     return img
 
-
 def img_normalize(img):
     r"""Image normalize...
     Args:
         img: [PIL.Image]: [h,w,c], `RGB` format in [0,255]
     Return:
-        img (tensor[float32])
+        img (tensor[float32]): [c,h,w] in the range[0.0,1.0]
     """
     return transforms.Compose([
         transforms.ToTensor(),
-        caffe_normalize if cfg.use_caffe else torch_normalize
+        # caffe_normalize if cfg.use_caffe else torch_normalize
     ])(img)
 
 
 
-def TrainTransform(img,boxes,labels):
+def TrainTransform(img,boxes,labels,size,data_aug=True):
     r"""Data augmentation transform
     Args:
         img (PIL.Image) : [h,w,c] with `RGB`, and each piexl in [0,255]
         boxes (np.ndarray[int32]): [n,4] with `xyxy`
         labels (np.ndarray[int32]): [n], the labels of the box
+        size (tupple): (width,height) of the image
+        data_aug (boolean): will enable the data augmentation if True
     Return:
         img (tensor[float32]): [c,s',s'] with `BGR`, and each pixel in [-128,127]
         boxes (tensor[float32] ): [n',4] with `xyxy`
@@ -68,28 +68,31 @@ def TrainTransform(img,boxes,labels):
     if isinstance(boxes,np.ndarray):
         boxes=torch.tensor(boxes).float()
     assert isinstance(boxes,torch.Tensor)
-
-    if cfg.data_aug:
+    
+    assert size[0]==size[1]
+    input_wh=size[0]
+    
+    if data_aug:
         img = random_distort(img)
         if torch.rand(1) < 0.5:
             img, boxes = random_paste(img, boxes, max_ratio=4, fill=(123, 116, 103))
 
         img, boxes, labels = random_crop(img, boxes, labels)
     img, boxes = resize_box(
-        img, boxes, size=(cfg.intput_wh, cfg.intput_wh),
+        img, boxes, size=(input_wh, input_wh),
         random_interpolation=True
     )
     
-    if cfg.data_aug:
+    if data_aug:
         img, boxes = random_flip(img, boxes)
     img=img_normalize(img)
 
     return img, boxes, labels
 
-def TestTransform(img,boxes):
+def TestTransform(img,boxes,size):
     r"""For the preprocess of test data
     Args:
-        img (PIL.Image): 
+        img (PIL.Image): [h,w,c]
         boxes (tensor): no use
     Return:
         img (tensor[float32]): [c,h,w], pixel range:[0,1.] 
@@ -97,8 +100,12 @@ def TestTransform(img,boxes):
     if isinstance(boxes,np.ndarray):
         boxes=torch.tensor(boxes).float()
     assert isinstance(boxes,torch.Tensor)
+    
+    assert size[0]==size[1]
+    input_wh=size[0]
+    
     img, _ = resize_box(
-        img, boxes, size=(cfg.intput_wh, cfg.intput_wh),
+        img, boxes, size=(input_wh, input_wh),
         random_interpolation=False
     )
 
@@ -109,29 +116,45 @@ def TestTransform(img,boxes):
 
 class TrainDataset(Dataset):
     classes=name_list
-    def __init__(self):
-        #self.cfg=cfg
-        self.sdb=VOCBboxDataset(cfg.voc_dir,'trainval')
-    
+    def __init__(self,w,h,voc_root='/root/workspace/D/VOC2007_2012',MAX_BOX_NUM=100):
+        r"""
+        Args:
+            w (int): width of the image
+            h (int): height of the image
+            voc_root(str): root directory of the voc data(transformed data)
+            MAX_BOX_NUM (int): indicates the maximum number of the boxes...
+        """
+        self.sdb=VOCDataset(voc_root,'train.txt')
+        self.target_size=(w,h)
+        self.MAX_BOX_NUM=MAX_BOX_NUM
+
     def __getitem__(self,idx):
-        # NOTE: sdb returns the `yxyx`...
-        ori_img= self.sdb._get_image(idx) # [h,w,c] 
+        r"""
+        Args:
+            idx (int): the idx of the sampled data
+        Return:
+            img (tensor[float32]): [c,h,w], pixel range (0,1)
+            
+        """
+        ori_img,boxes,labels= self.sdb[idx] # [h,w,c] 
         
-        # change dim order
-        # ori_img=ori_img.transpose(1,2,0) # [h,w,c]
-
-        boxes,labels,diffs=self.sdb._get_annotations(idx)
         boxes=boxes.copy()
-        boxes=boxes[:,[1,0,3,2]] # change `yxyx` to `xyxy`
 
-        # boxes=torch.tensor(boxes)
-        img,boxes,labels=TrainTransform(ori_img,boxes,labels)
+        img,boxes,labels=TrainTransform(ori_img,boxes,labels,self.target_size)
 
-        target_,labels_=calc_target_(boxes,labels)
-        num_pos=(labels_>0).sum()
-        # tqdm.write("Image Id:%d, number of pos:%d"%(idx,num_pos) ,end=',\t ' )
+        real_box_num=len(boxes)
+        real_box_num=torch.tensor(real_box_num)
 
-        return img,target_,labels_
+        # boxes with the fixed length...
+        # it will cost extra memory but i have no way...
+        assert real_box_num<=self.MAX_BOX_NUM
+        fixed_boxes=torch.full([self.MAX_BOX_NUM,4],-1).float()
+        fixed_boxes[:real_box_num]=boxes
+
+        fixed_labels=torch.full([self.MAX_BOX_NUM],-999).long()
+        fixed_labels[:real_box_num]=labels
+
+        return img,fixed_boxes,fixed_labels,real_box_num
 
 
     def __len__(self):
@@ -139,19 +162,36 @@ class TrainDataset(Dataset):
 
 class TestDataset(Dataset):
     classes=name_list
-    def __init__(self, voc_data_dir=cfg.voc_dir, split='test', use_difficult=True):
-        self.sdb = VOCBboxDataset(voc_data_dir, split=split, use_difficult=use_difficult)
-
+    def __init__(self,w,h,voc_root='/root/workspace/D/VOC2007_2012',MAX_BOX_NUM=100):
+        self.sdb = VOCDataset(voc_root,'test.txt')
+        self.target_size=(w,h)
+        self.MAX_BOX_NUM=MAX_BOX_NUM
+        
     def __getitem__(self, idx):
-        ori_img= self.sdb._get_image(idx)
+        ori_img,boxes,labels= self.sdb[idx]
         # ori_img=ori_img.transpose(1,2,0) # [h,w,c]
-        boxes,labels,diffs=self.sdb._get_annotations(idx)
         boxes=boxes.copy()
-        boxes=boxes[:,[1,0,3,2]] # change `yxyx` to `xyxy`
 
-        img=TestTransform(ori_img,boxes.copy() )
+        img=TestTransform(ori_img,boxes.copy(),self.target_size)
+
+        real_box_num=len(boxes)
+        real_box_num=torch.tensor(real_box_num)
+
+        # boxes with the fixed length...
+        # it will cost extra memory but i have no way...
+        assert real_box_num<=self.MAX_BOX_NUM
+        fixed_boxes=torch.full([self.MAX_BOX_NUM,4],-1).float()
+        fixed_boxes[:real_box_num]=boxes
+
+        fixed_labels=torch.full([self.MAX_BOX_NUM],-999).long()
+        fixed_labels[:real_box_num]=labels
+
+        fixed_diffs=torch.full([self.MAX_BOX_NUM],0).long()        
+
+
         return img, np.array(ori_img.size),\
-            boxes,labels.astype('long'), diffs.astype('int')
+            fixed_boxes,fixed_labels, fixed_diffs,\
+            real_box_num
 
     def __len__(self):
         return len(self.sdb)

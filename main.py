@@ -43,7 +43,7 @@ def train():
 
     # boxes=get_default_boxes()
     # print(boxes.shape)
-    data_set=TrainDataset()
+    data_set=TrainDataset(416,416)
 
     data_loader=DataLoader(
         data_set,
@@ -53,6 +53,10 @@ def train():
         num_workers=cfg.num_worker
     )
     
+    for b_imgs,b_boxes,b_labels,b_real_box_num in tqdm(data_loader):
+        tqdm.write('%s %s %s'%(str(b_imgs.shape),str(b_imgs.max()),str(b_imgs.min())) )
+
+    exit(0)
     # NOTE: plus one, en?
     net=SSD(len(data_set.classes)+1)
     net._print()

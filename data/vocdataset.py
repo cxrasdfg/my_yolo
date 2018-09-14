@@ -3,8 +3,13 @@ import os
 import warnings
 import xml.etree.ElementTree as ET
 
+from PIL import Image
 from torch.utils.data import Dataset
-import cv2
+
+def read_image(path):
+     f = Image.open(path)
+     img = f.convert('RGB')
+     return img
 
 class VOCDataset(Dataset):  
     classes = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]    
@@ -44,19 +49,19 @@ class VOCDataset(Dataset):
         Args:
             idx(int): index of the sampled data
         Return:
-            img (np.ndarray[float32]):  `RGB` format, pixel range[0,255]
+            img (PIL.Image):  `RGB` format, pixel range[0,255]
             boxes (np.ndarray[float32]): `xyxy` format, abstract coordinate
-            labels (np.ndarray[int]): from 0 to `cls_num-1`
+            labels (np.ndarray[int]): from 0 to `cls_num`-1
         """
         img_path=self._root+'/'+ self._img_list[idx] # abosolute path
         boxes=self._gt[idx]  # [N,5].(cls_id,xmin,ymin,xmax,ymax), float type.
         boxes=boxes.copy() # copy to avoid the potential changes.. 
-        img=cv2.imread(img_path)
-        h,w,c=img.shape
+        img=read_image(img_path)
+        # h,w,c=img.shape
         # boxes[:,1:]=boxes[:,1:]/np.array([w,h,w,h]) # normalization   
 
-        img=img[:,:,::-1] # convert bgr to rgb
-        img=img.astype('float32')
+        # img=img[:,:,::-1] # convert bgr to rgb
+        # img=img.astype('float32')
 
         return img,boxes[:,1:],(boxes[:,0]).astype('int')
 
