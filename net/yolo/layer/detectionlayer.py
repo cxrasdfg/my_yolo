@@ -4,6 +4,8 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 
+from utility import t_meshgrid_2d,t_box_iou
+
 class DetectionLayer(torch.nn.Module):
     def __init__(self,classes,
         coords,
@@ -65,7 +67,6 @@ class DetectionLayer(torch.nn.Module):
             b_real_box_num=args
             # continue?
             # self.side*self.side*(self.num*(self.coord+self.rescore)+self.classes)
-            
             
         else:
 
