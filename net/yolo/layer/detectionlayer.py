@@ -63,6 +63,10 @@ class DetectionLayer(torch.nn.Module):
             x,b_fixed_boxes,\
             b_fixed_labels,\
             b_real_box_num=args
+            # continue?
+            # self.side*self.side*(self.num*(self.coord+self.rescore)+self.classes)
+            
             
         else:
+
             raise NotImplementedError()
