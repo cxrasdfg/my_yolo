@@ -347,7 +347,7 @@ class Darknet(nn.Module):
                 if self.training:
                     x=module(x,b_fixed_boxes,\
                         b_fixed_labels,\
-                        b_real_box_num)
+                        b_real_box_num,self)
                 else:
                     raise NotImplementedError()
                 output.append('detection output, take a place')
@@ -364,7 +364,8 @@ class Darknet(nn.Module):
         return res
 
     def load_trained_weight(self,file_name):
-        r"""This method will use the darknet pretrained weights...
+        r"""This method will use the darknet pretrained weights,
+        the weight file must be the darknet binary weight file...
         Args:
             file_name: name of the darknet weight file
         """

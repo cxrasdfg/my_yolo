@@ -1,7 +1,7 @@
 # coding=utf-8
 
 import torch
-
+from torch.autograd import Variable
 
 def encode_box(real_boxes,anchor_boxes):
     """Encode the real_box to the corresponding parameterized coordinates
