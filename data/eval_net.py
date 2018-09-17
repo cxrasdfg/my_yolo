@@ -60,17 +60,24 @@ def eval_net(net,num=cfg.eval_number,shuffle=False):
     pred_classes=[]
     pred_scores=[]
 
-    for i,(img,sr_im_size,gt_box,label,diff) in tqdm(enumerate(data_loader)):
+    for i,(b_img,b_src_img_size,\
+            b_fixed_boxes,b_fixed_labels,b_fixed_diffs,\
+            b_real_box_num) in tqdm(enumerate(data_loader)):
         assert img.shape[0]==1
+        
         if i> upper_bound:
             break
 
-        sr_im_size=sr_im_size.float()
+        b_src_img_size=b_src_img_size.float()
         if is_cuda:
-            img=img.cuda(did)
-            im_size=sr_im_size.cuda(did)
-            
-        pred_box,pred_class,pred_prob=net.predict(img,im_size)[0]
+            b_img=b_img.cuda(did)
+            b_src_img_size= b_src_img_size.cuda(did)
+        
+        detect_res=net(b_img,b_src_img_size)
+        pred_box,pred_class,pred_prob=None,None,None
+
+        assert 0, "you must implement the batch version!"
+
         prob_mask=pred_prob>cfg.out_thruth_thresh
         pbox=pred_box[prob_mask ] 
         plabel=pred_class[prob_mask ].long()

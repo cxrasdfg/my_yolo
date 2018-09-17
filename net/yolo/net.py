@@ -298,7 +298,8 @@ class Darknet(nn.Module):
             b_fixed_labels,\
             b_real_box_num=args
         else:
-            raise NotImplementedError()
+            x,b_src_img_size=args
+            
         output=[]  # save the reference for the output of corresponding layer
         res=[]
         idx=0
@@ -369,7 +370,7 @@ class Darknet(nn.Module):
                         b_fixed_labels,\
                         b_real_box_num,self)
                 else:
-                    raise NotImplementedError()
+                    x=module(x,b_src_img_size)
                 output.append('detection output, take a place')
                 res.append(x)
                 

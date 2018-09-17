@@ -81,7 +81,7 @@ def train():
             tqdm.write('Epoch:%d, iter:%d, loss:%.5f'%(epoch,iteration,_loss))
 
             iteration+=1
-            adjust_lr(net.optimizer,iteration,cfg.lrs)
+            # adjust_lr(net.optimizer,iteration,cfg.lrs)
 
         if epoch % cfg.save_per_epoch ==0:
             torch.save(net.state_dict(),'%sweights_%d_%d'%(cfg.weights_dir,epoch,iteration) )

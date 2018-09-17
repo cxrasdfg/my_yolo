@@ -48,7 +48,7 @@ def img_normalize(img):
 
 
 
-def TrainTransform(img,boxes,labels,size,data_aug=True):
+def TrainTransform(img,boxes,labels,size,data_aug=False):
     r"""Data augmentation transform
     Args:
         img (PIL.Image) : [h,w,c] with `RGB`, and each piexl in [0,255]
@@ -113,10 +113,9 @@ def TestTransform(img,boxes,size):
 
     return img
 
-
 class TrainDataset(Dataset):
     classes=name_list
-    def __init__(self,w,h,voc_root='/root/workspace/D/VOC2007_2012',MAX_BOX_NUM=100):
+    def __init__(self,w,h,voc_root='/root/workspace/D/VOC2007_2012',MAX_BOX_NUM=100,data_aug=False):
         r"""
         Args:
             w (int): width of the image
@@ -127,6 +126,10 @@ class TrainDataset(Dataset):
         self.sdb=VOCDataset(voc_root,'train.txt')
         self.target_size=(w,h)
         self.MAX_BOX_NUM=MAX_BOX_NUM
+        self.data_aug=data_aug
+
+        if not self.data_aug:
+            print('Warning: the data augumentation is not enabled...')
 
     def __getitem__(self,idx):
         r"""
@@ -139,8 +142,8 @@ class TrainDataset(Dataset):
         ori_img,boxes,labels= self.sdb[idx] # [h,w,c] 
         
         boxes=boxes.copy()
-
-        img,boxes,labels=TrainTransform(ori_img,boxes,labels,self.target_size)
+       
+        img,boxes,labels=TrainTransform(ori_img,boxes,labels,self.target_size,data_aug=self.data_aug)
 
         real_box_num=len(boxes)
         real_box_num=torch.tensor(real_box_num)

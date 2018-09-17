@@ -66,12 +66,13 @@ class DetectionLayer(torch.nn.Module):
                 b_real_box_num (tensor[long]): [b], number of real boxes in element of batch
                 ref_darknet: reference to the darknet, then we can get the gloabl hyperparams...
             else:
-                x (tensor[float32]): [b,f]
+                b_x (tensor[float32]): [b,f]
+                b_src_img_size (tensor[float32]): [b,2], stores the original image width and height
         Return:
             if self.training:
                 loss (tensor[float32]): the loss of it...
             else:
-                
+                res (list[(pred_boxes,pred_labels,pred_confs),...])
         """
         if self.training:
             b_x,b_fixed_boxes,\
@@ -233,6 +234,6 @@ class DetectionLayer(torch.nn.Module):
             # print(ref_darknet)
             # exit(0)
         else:
-
+            b_x,b_src_img_size=args
             raise NotImplementedError()
     
