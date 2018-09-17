@@ -52,10 +52,24 @@ class DetectionLayer(torch.nn.Module):
         class_scale,\
         coord_scale
 
-        x=torch.linspace(0,self.side-1,self.side) 
-        self.x_grid,\
-        self.y_grid=t_meshgrid_2d(x,x) # range [0,self.side-1]
+        self.get_default_xy()
 
+    def get_default_xy(self):
+        x=torch.linspace(0,self.side-1,self.side) 
+        x_grid,y_grid=t_meshgrid_2d(x,x) # range [0,self.side-1]
+        
+        # prepare `default box`
+        x_grid=x_grid[...,None] # [side,side,1]
+        y_grid=y_grid[...,None] # [side,side,1]
+
+        x_grid=x_grid.expand(-1,-1,self.num) # [side,side,num]
+        y_grid=y_grid.expand(-1,-1,self.num) # [side,side,num]
+        
+        x_grid=x_grid[...,None] # [side,side,num,1]
+        y_grid=y_grid[...,None] # [side,side,num,1]
+        
+        self.default_xy=torch.cat([x_grid,y_grid],dim=3) # [side,side,num,2]
+        
     def forward(self,*args):
         r"""
         Args:
@@ -90,27 +104,14 @@ class DetectionLayer(torch.nn.Module):
             
             img_h=ref_darknet.net_height
             img_w=ref_darknet.net_width
-            
-            x_grid=self.x_grid.type_as(b_x) # [side,side]=[7,7]
-            y_grid=self.y_grid.type_as(b_x)# [side,side]=[7,7]
-
-            # prepare `default box`
-            x_grid=x_grid[...,None] # [side,side,1]
-            y_grid=y_grid[...,None] # [side,side,1]
-
-            x_grid=x_grid.expand(-1,-1,self.num) # [side,side,num]
-            y_grid=y_grid.expand(-1,-1,self.num) # [side,side,num]
-            
-            x_grid=x_grid[...,None] # [side,side,num,1]
-            y_grid=y_grid[...,None] # [side,side,num,1]
-            
-            default_xy=torch.cat([x_grid,y_grid],dim=3) # [side,side,num,2]
 
             # NOTE: no normalization, since offset laies on [0,1]
             # normalize to [0.,1.]
             # default_xy[...,0]/=1.*self.side
             # default_xy[...,1]/=1.*self.side    
             
+            default_xy=self.default_xy.type_as(b_x)
+
             loss=[]
             for idx_batch,(x, # [7,7,35]
                     fixed_boxes, # [box_num,4]
@@ -194,7 +195,7 @@ class DetectionLayer(torch.nn.Module):
                     ious=t_box_iou(cell_boxes,gt_loc_xyxy[None]).view(-1) # [num]
                     max_box_idx=ious.argmax()
                     
-                    # NOTE: it may cause one cell box is assigned to multi gt boxes, use flag array to prevent.
+                    # NOTE: it may cause one cell box is assigned to multi gt boxes, we can use flag array to prevent.
                     gt_cell_asiign[cell_i,cell_j]=1
                     gt_cell_box_assign[cell_i,cell_j,max_box_idx]=1
                     # NOTE: No need for plusing by one
