@@ -58,6 +58,9 @@ class Darknet(nn.Module):
             self.load_trained_weight(weight_file)
         # print(self.layers)
 
+        # get optimizer...
+        self.get_optimizer()
+
     def create_net(self):
         idx=0
         LOC=[] # Layer Output Channel
@@ -259,18 +262,35 @@ class Darknet(nn.Module):
         self.layers=nn.Sequential(OrderedDict(layers))
     
     def get_optimizer(self):
-        raise NotImplementedError()
+        params=[]
+        for key, value in dict(self.named_parameters()).items():
+            if value.requires_grad:
+                params += [{'params': [value], 'lr': self.learning_rate, 'weight_decay': self.decay}]
+        
+        print("Using SGD optimizer")
+        self.optimizer = torch.optim.SGD(params, momentum=self.momentum)
+        return self.optimizer
     
     def opt_step(self,loss):
         r"""Use the loss to backward the net, 
         then the optimizer will update the weights
         which requires grad...
         Args:
-            loss (tensor[float32])
+            loss (list[tensor]): list of the tensor
         Return:
             loss (tensor[float32]): value of current loss...
         """
-        raise NotImplementedError()
+        assert isinstance(loss,list)
+        
+        loss=sum(loss)/len(loss)
+        
+        # grad descend
+        loss.backward()
+        # torch.nn.utils.clip_grad_norm(self.parameters(),10)
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+
+        return loss.item()
 
     def forward(self,*args):
         if self.training:
