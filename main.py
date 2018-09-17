@@ -20,6 +20,8 @@ from tqdm import tqdm
 import sys
 import os
 
+os.environ['CUDA_VISIBLE_DEVICES']='1'
+
 def adjust_lr(opt,iters,lrs=cfg.lrs):
     lr=0
     for k,v in lrs.items():
