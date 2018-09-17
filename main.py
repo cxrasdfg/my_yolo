@@ -62,9 +62,9 @@ def train():
     did=cfg.device_id
     if is_cuda:
         net.cuda(did)
+    print( list(net.children()) )
 
     while epoch<cfg.epochs:
-        
         # print('********\t EPOCH %d \t********' % (epoch))
         for b_imgs,b_boxes,b_labels,b_real_box_num in tqdm(data_loader):
             if is_cuda:

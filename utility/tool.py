@@ -64,10 +64,11 @@ def ccwh2xyxy(boxes,inplace=False):
     else:
         after_boxes=boxes.clone()
     
-    if isinstance(after_boxes,Variable) and inplace:
-        after_boxes[:,:2]=after_boxes[:,:2].clone()-after_boxes[:,2:]/2
-        after_boxes[:,2:]=after_boxes[:,2:].clone()+after_boxes[:,:2]
+    if isinstance(after_boxes,Variable):
+        after_boxes[:,:2]=after_boxes[:,:2].clone()-after_boxes[:,2:].clone()/2
+        after_boxes[:,2:]=after_boxes[:,2:].clone()+after_boxes[:,:2].clone()
     else:
+        print("Warning: use inplace operation")
         after_boxes[:,:2]-=after_boxes[:,2:]/2
         after_boxes[:,2:]+=after_boxes[:,:2]
     
@@ -85,11 +86,12 @@ def xyxy2ccwh(boxes,inplace=False):
         after_boxes=boxes
     else:
         after_boxes=boxes.clone()
-    if isinstance(after_boxes,Variable) and inplace:
+    if isinstance(after_boxes,Variable):
         # use clone, or it will raise the inplace error
-        after_boxes[:,2:]=after_boxes[:,2:].clone()-after_boxes[:,:2]
-        after_boxes[:,:2]=after_boxes[:,:2].clone()+after_boxes[:,2:]/2
+        after_boxes[:,2:]=after_boxes[:,2:].clone()-after_boxes[:,:2].clone()
+        after_boxes[:,:2]=after_boxes[:,:2].clone()+after_boxes[:,2:].clone()/2
     else:
+        print("Warning: use inplace operation")
         after_boxes[:,2:]-=after_boxes[:,:2]
         after_boxes[:,:2]+=after_boxes[:,2:]/2
     return after_boxes
@@ -109,7 +111,6 @@ def t_meshgrid_2d(x_axis,y_axis):
 
     return x_axis,y_axis
     
-
 def t_box_iou(A,B):
     r"""Calculate iou between two boxes :attr:`A`
     and :attr:`B` obeys the format `xyxy`
