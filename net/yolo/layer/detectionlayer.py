@@ -212,7 +212,11 @@ class DetectionLayer(torch.nn.Module):
                 # 5.prepare the loss function....
                 if self.sqrt:
                     gt_loc_target[...,2:]=gt_loc_target[...,2:].clone().sqrt()
-                    out_loc[...,2:]=out_loc[...,2:].clone().sqrt()
+                    # NOTE: using this exp will raise the inplace error, but I have used `clone` to prevent, confused...
+                    # out_loc[...,2:]=out_loc[...,2:].clone().sqrt()+0                    
+                    sqrt_wh=out_loc[...,2:].clone().sqrt()
+                    out_loc=out_loc.clone()
+                    out_loc[...,2:]=sqrt_wh
                 
                 one_obj_i_j_mask=gt_cell_box_assign > 0 # [side,side,num]
                 one_obj_i_mask=gt_cell_asiign > 0 # [side,side]
