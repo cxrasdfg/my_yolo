@@ -378,42 +378,43 @@ class Darknet(nn.Module):
                 res.append(x)
                 
                 # at final, merge all the detection layer
-                assert idx>=len(self.layers)-1
-                if idx>=len(self.layers)-1:
-                    res_boxes=torch.empty(0).type_as(x)
-                    res_clses=torch.empty(0).type_as(x)
-                    res_confs=torch.empty(0).type_as(x)
+                if not self.training:
+                    assert idx>=len(self.layers)-1
+                    if idx>=len(self.layers)-1:
+                        res_boxes=torch.empty(0).type_as(x)
+                        res_clses=torch.empty(0).type_as(x)
+                        res_confs=torch.empty(0).type_as(x)
 
-                    for b_pred_boxes,\
-                        b_pred_clses,\
-                        b_pred_confs in\
-                        res:
-                        res_boxes=torch.cat([res_boxes,b_pred_boxes],dim=1) # [b,n'+n,4]
-                        res_clses=torch.cat([res_clses,b_pred_clses],dim=1) # [b,n'+n,20]
-                        res_confs=torch.cat([res_confs,b_pred_confs],dim=1) # [b,n'+n]
-                    
-                    # for each sample in batch
-                    res=[]
-                    for pred_boxes,\
-                        pred_clses,\
-                        pred_confs,\
-                        img_size in\
-                        zip(res_boxes,res_clses,res_confs,b_img_src_size):
-                        # filter the box
-                        conf_mask=pred_confs>.3
-                        pred_boxes=pred_boxes[conf_mask] # [n'',4]
-                        pred_clses=pred_clses[conf_mask] # [n'',classes]
-                        nms_res=self.nms(torch.cat([pred_boxes,pred_clses],dim=1))
+                        for b_pred_boxes,\
+                            b_pred_clses,\
+                            b_pred_confs in\
+                            res:
+                            res_boxes=torch.cat([res_boxes,b_pred_boxes],dim=1) # [b,n'+n,4]
+                            res_clses=torch.cat([res_clses,b_pred_clses],dim=1) # [b,n'+n,20]
+                            res_confs=torch.cat([res_confs,b_pred_confs],dim=1) # [b,n'+n]
                         
-                        final_boxes=nms_res[:,:4]
-                        final_probs=nms_res[:,4:]
-                        final_classes=final_probs.argmax(dim=1)
-                        
-                        # scale to
-                        final_boxes[:,[0,2]]*=img_size[0]
-                        final_boxes[:,[1,3]]*img_size[1]
+                        # for each sample in batch
+                        res=[]
+                        for pred_boxes,\
+                            pred_clses,\
+                            pred_confs,\
+                            img_size in\
+                            zip(res_boxes,res_clses,res_confs,b_img_src_size):
+                            # filter the box
+                            conf_mask=pred_confs>.3
+                            pred_boxes=pred_boxes[conf_mask] # [n'',4]
+                            pred_clses=pred_clses[conf_mask] # [n'',classes]
+                            nms_res=self.nms(torch.cat([pred_boxes,pred_clses],dim=1))
+                            
+                            final_boxes=nms_res[:,:4]
+                            final_probs=nms_res[:,4:]
+                            final_classes=final_probs.argmax(dim=1)
+                            
+                            # scale to
+                            final_boxes[:,[0,2]]*=img_size[0]
+                            final_boxes[:,[1,3]]*img_size[1]
 
-                        res.append((final_boxes,final_classes,final_probs))
+                            res.append((final_boxes,final_classes,final_probs))
     
             else:
                 raise ValueError('unrecognized layer...')
