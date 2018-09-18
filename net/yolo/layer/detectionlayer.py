@@ -69,7 +69,62 @@ class DetectionLayer(torch.nn.Module):
         y_grid=y_grid[...,None] # [side,side,num,1]
         
         self.default_xy=torch.cat([x_grid,y_grid],dim=3) # [side,side,num,2]
+    
+    def convert_features(self,b_x,default_xy):
+        r"""Convert the net out to proper format
+        Args:
+            b_x (tensor[float32]): [b,f]
+            default_xy (tensor[float32]): [b,side,side,num,2]
+        Return:
+            b_out_loc (tensor[float32]): [b,side,side,num,4], net location output after sigmoid
+            b_out_conf (tensor[float32]): [b,side,side,num], net confidence output after sigmoid
+            b_out_cls (tensor[float32]): [b,side,side,20], net class output after softmax or sigmoid
+            b_pred_loc (tensor[float32]): [b,side,side,num,4], net predcited boxes in each cell boxes...
+        """
+        # reshape
+        b,_=b_x.shape
+
+        # here shape to be [b,side,side,(num*(coords+rescore)+classes)]
+        b_x=b_x.view(b,self.side,self.side,(self.num*(self.coords+self.rescore)+self.classes))
         
+        
+
+        # 2. some transformations on net output
+        b_out_locoff_conf=b_x[...,:self.num*(self.coords+self.rescore)]
+        
+        # [b,side,side,num,(coords+rescore)]
+        b_out_locoff_conf=b_out_locoff_conf.view(b,self.side,self.side,self.num,self.coords+self.rescore) 
+        
+        b_out_locoff=b_out_locoff_conf[...,:self.coords] # [b,side,side,num,coords]
+        b_out_conf=b_out_locoff_conf[...,self.coords] # [b,side,side,num]
+
+        b_out_cls=b_x[...,self.num*(self.coords+self.rescore):] # [b,side,side,classes]
+        
+        # 3. from output to predict box...
+        # out_loc,out_conf,out_cls
+        # I think should add sigmoid on location.
+        b_out_loc=b_out_locoff.sigmoid() # [b,side,side,num,4]
+        b_out_conf=b_out_conf.sigmoid() # [b,side,side,num]
+
+        if self.softmax:
+            b_out_cls=b_out_cls.softmax(dim=3) # [b,side,side,20]
+        else:
+            b_out_cls=b_out_cls.sigmoid() # [b,side,side,20]
+        
+        b_pred_loc=b_out_loc.clone() # [b,side,side,num,4]
+        # NOTE: add default_xy, from the offset to the relative coords...
+        b_pred_loc[...,:2]=b_pred_loc[...,:2].clone()+default_xy
+
+        # normalize the x,y in pred_loc to [0,1]
+        b_pred_loc[...,:2]=b_pred_loc[...,:2].clone()/self.side
+
+        # NOTE: no normalization, since offset laies on [0,1]
+        # normalize to [0.,1.]
+        # default_xy[...,0]/=1.*self.side
+        # default_xy[...,1]/=1.*self.side   
+
+        return  b_out_loc,b_out_conf,b_out_cls,b_pred_loc
+
     def forward(self,*args):
         r"""
         Args:
@@ -96,29 +151,22 @@ class DetectionLayer(torch.nn.Module):
             # continue?
             # self.side*self.side*(self.num*(self.coords+self.rescore)+self.classes)
             
-            # reshape
+            # convert features...
             b,_=b_x.shape
+            default_xy=self.default_xy[None].expand(b,-1,-1,-1,-1).type_as(b_x)
+            b_out_loc,b_out_conf,b_out_cls,b_pred_loc=self.convert_features(b_x,default_xy)
 
-            # here shape to be [b,side,side,(num*(coords+rescore)+classes)]
-            b_x=b_x.view(b,self.side,self.side,(self.num*(self.coords+self.rescore)+self.classes))
-            
             img_h=ref_darknet.net_height
             img_w=ref_darknet.net_width
 
-            # NOTE: no normalization, since offset laies on [0,1]
-            # normalize to [0.,1.]
-            # default_xy[...,0]/=1.*self.side
-            # default_xy[...,1]/=1.*self.side    
-            
-            default_xy=self.default_xy.type_as(b_x)
-
             loss=[]
-            for idx_batch,(x, # [7,7,35]
+            for idx_batch,(out_loc,out_conf,out_cls,pred_loc,
                     fixed_boxes, # [box_num,4]
                     fiexd_labels, # [box_num]
                     real_box_num,
                 )\
-                in enumerate(zip(b_x,b_fixed_boxes,b_fixed_labels,b_real_box_num)):
+                in enumerate(zip(b_out_loc,b_out_conf,b_out_cls,b_pred_loc,
+                    b_fixed_boxes,b_fixed_labels,b_real_box_num)):
                 # NOTE: get the real boxes...
                 boxes=fixed_boxes[:real_box_num]
                 labels=fiexd_labels[:real_box_num]
@@ -140,36 +188,8 @@ class DetectionLayer(torch.nn.Module):
                 ccwh_boxes[:,[0,2]]= ccwh_boxes[:,[0,2]].clone()/(1.0*self.side)
                 ccwh_boxes[:,[1,3]]= ccwh_boxes[:,[1,3]].clone()/(1.0*self.side)
 
-                # 2. some transformations on net output
-                out_locoff_conf=x[...,:self.num*(self.coords+self.rescore)]
                 
-                # [side,side,num,(coords+rescore)]
-                out_locoff_conf=out_locoff_conf.view(self.side,self.side,self.num,-1) 
-                
-                out_locoff=out_locoff_conf[...,:self.coords] # [side,side,num,coords]
-                out_conf=out_locoff_conf[...,self.coords] # [side,side,num]
-
-                out_cls=x[...,self.num*(self.coords+self.rescore):] # [side,side,classes]
-                
-                # 3. from output to predict box...
-                # out_loc,out_conf,out_cls
-                # I think should add sigmoid on location.
-                out_loc=out_locoff.sigmoid() # [side,side,num,4]
-                out_conf=out_conf.sigmoid() # [side,side,num]
-
-                if self.softmax:
-                    out_cls=out_cls.softmax(dim=2) # [side,side,20]
-                else:
-                    out_cls=out_cls.sigmoid() # [side,side,20]
-                
-                pred_loc=out_loc.clone() # [side,side,num,4]
-                # NOTE: add default_xy, from the offset to the relative coords...
-                pred_loc[...,:2]=pred_loc[...,:2].clone()+default_xy
-                
-                # normalize the x,y in pred_loc to [0,1]
-                pred_loc[...,:2]=pred_loc[...,:2].clone()/self.side
-
-                # 4. match the box centered in
+                # 2. match the box centered in
                 # centered_loc=pred_loc[y_idx,x_idx] # [len(y_idx),num,4]=[real_box_num,num,4]
                 # change to `xyxy`
                 xyxy_boxes=ccwh2xyxy(ccwh_boxes)
@@ -206,12 +226,12 @@ class DetectionLayer(torch.nn.Module):
                     
                     # NOTE: get offset...
                     tt=gt_loc_ccwh.clone()
-                    tt[:2]=tt[:2].clone()*self.side-default_xy[cell_i,cell_j,max_box_idx]
+                    tt[:2]=tt[:2].clone()*self.side-default_xy[idx_batch,cell_i,cell_j,max_box_idx]
                     gt_loc_target[cell_i,cell_j,max_box_idx]=tt
                     # assign iou... i.e. the confidence target...
                     gt_iou_target[cell_i,cell_j,max_box_idx]=ious[max_box_idx] 
                 
-                # 5.prepare the loss function....
+                # 3.prepare the loss function....
                 if self.sqrt:
                     gt_loc_target[...,2:]=gt_loc_target[...,2:].clone().sqrt()
                     # NOTE: using this exp will raise the inplace error, but I have used `clone` to prevent, confused...
