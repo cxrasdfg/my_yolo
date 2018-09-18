@@ -300,7 +300,7 @@ class Darknet(nn.Module):
             b_fixed_labels,\
             b_real_box_num=args
         else:
-            x=args
+            x,b_img_src_size=args
             
         output=[]  # save the reference for the output of corresponding layer
         res=[]
@@ -393,17 +393,28 @@ class Darknet(nn.Module):
                         res_confs=torch.cat([res_confs,b_pred_confs],dim=1) # [b,n'+n]
                     
                     # for each sample in batch
+                    res=[]
                     for pred_boxes,\
                         pred_clses,\
-                        pred_confs in\
-                        zip(res_boxes,res_clses,res_confs):
+                        pred_confs,\
+                        img_size in\
+                        zip(res_boxes,res_clses,res_confs,b_img_src_size):
                         # filter the box
                         conf_mask=pred_confs>.3
                         pred_boxes=pred_boxes[conf_mask] # [n'',4]
                         pred_clses=pred_clses[conf_mask] # [n'',classes]
-                        self.nms()
-
+                        nms_res=self.nms(torch.cat([pred_boxes,pred_clses],dim=1))
                         
+                        final_boxes=nms_res[:,:4]
+                        final_probs=nms_res[:,4:]
+                        final_classes=final_probs.argmax(dim=1)
+                        
+                        # scale to
+                        final_boxes[:,[0,2]]*=img_size[0]
+                        final_boxes[:,[1,3]]*img_size[1]
+
+                        res.append((final_boxes,final_classes,final_probs))
+    
             else:
                 raise ValueError('unrecognized layer...')
 

@@ -192,7 +192,7 @@ class TestDataset(Dataset):
         fixed_diffs=torch.full([self.MAX_BOX_NUM],0).long()        
 
 
-        return img,\
+        return img, np.array(ori_img.size),\
             fixed_boxes,fixed_labels, fixed_diffs,\
             real_box_num
 

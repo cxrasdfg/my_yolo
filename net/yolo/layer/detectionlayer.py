@@ -255,7 +255,7 @@ class DetectionLayer(torch.nn.Module):
             # print(ref_darknet)
             # exit(0)
         else:
-            b_x=args[0]
+            b_x,=args
             b,_=b_x.shape
             _,b_out_conf,b_out_cls,b_pred_loc,_=self.convert_features(b_x)
             
