@@ -70,20 +70,20 @@ class DetectionLayer(torch.nn.Module):
         
         self.default_xy=torch.cat([x_grid,y_grid],dim=3) # [side,side,num,2]
     
-    def convert_features(self,b_x,default_xy):
+    def convert_features(self,b_x):
         r"""Convert the net out to proper format
         Args:
             b_x (tensor[float32]): [b,f]
-            default_xy (tensor[float32]): [b,side,side,num,2]
         Return:
             b_out_loc (tensor[float32]): [b,side,side,num,4], net location output after sigmoid
             b_out_conf (tensor[float32]): [b,side,side,num], net confidence output after sigmoid
             b_out_cls (tensor[float32]): [b,side,side,20], net class output after softmax or sigmoid
             b_pred_loc (tensor[float32]): [b,side,side,num,4], net predcited boxes in each cell boxes...
+            default_xy (tensor[float32]): [b,side,side,num,2]
         """
         # reshape
         b,_=b_x.shape
-
+        default_xy=self.default_xy[None].expand(b,-1,-1,-1,-1).type_as(b_x)
         # here shape to be [b,side,side,(num*(coords+rescore)+classes)]
         b_x=b_x.view(b,self.side,self.side,(self.num*(self.coords+self.rescore)+self.classes))
         
@@ -123,7 +123,7 @@ class DetectionLayer(torch.nn.Module):
         # default_xy[...,0]/=1.*self.side
         # default_xy[...,1]/=1.*self.side   
 
-        return  b_out_loc,b_out_conf,b_out_cls,b_pred_loc
+        return  b_out_loc,b_out_conf,b_out_cls,b_pred_loc,default_xy
 
     def forward(self,*args):
         r"""
@@ -151,10 +151,7 @@ class DetectionLayer(torch.nn.Module):
             # continue?
             # self.side*self.side*(self.num*(self.coords+self.rescore)+self.classes)
             
-            # convert features...
-            b,_=b_x.shape
-            default_xy=self.default_xy[None].expand(b,-1,-1,-1,-1).type_as(b_x)
-            b_out_loc,b_out_conf,b_out_cls,b_pred_loc=self.convert_features(b_x,default_xy)
+            b_out_loc,b_out_conf,b_out_cls,b_pred_loc,default_xy=self.convert_features(b_x)
 
             img_h=ref_darknet.net_height
             img_w=ref_darknet.net_width
@@ -256,5 +253,7 @@ class DetectionLayer(torch.nn.Module):
             # exit(0)
         else:
             b_x,b_src_img_size=args
+            _,_,_,b_pred_loc,default_xy=self.convert_features(b_x)
+            
             raise NotImplementedError()
     
