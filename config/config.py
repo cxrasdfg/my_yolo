@@ -25,8 +25,8 @@ class CFG():
     alpha=1.
     sigma=1.
     epochs=416
-    save_per_epoch=32
-    eval_per_epoch=32
+    save_per_epoch=4
+    eval_per_epoch=4
     lr=1e-3
     lrs={'40000':lr,'50000':lr/10.,'60000':lr/100.}
     weight_decay=0.0005
