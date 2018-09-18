@@ -27,14 +27,14 @@ def get_check_point():
 
 
 def eval_net(net,num=cfg.eval_number,shuffle=False):
-    data_set=TestDataset()
-    data_loader=DataLoader(data_set,batch_size=1,shuffle=shuffle,drop_last=False)
     
     is_cuda=cfg.use_cuda
     did=cfg.device_id
 
     if net is None:
         assert 0
+        data_set=TestDataset()
+        data_loader=DataLoader(data_set,batch_size=1,shuffle=shuffle,drop_last=False)
         classes=data_set.classes
         net=MyNet(len(classes)+1)
         _,_,last_time_model=get_check_point()

@@ -124,7 +124,7 @@ def test_net():
         net.cuda(did)
         img=img.cuda(did)
     boxes,labels,probs=net(img,torch.tensor([[w,h]]).type_as(img))[0]
-
+    print(boxes)
     img_src=np.array(img_src) # [h,w,3] 'RGB'
     # change to 'BGR'
     img_src=img_src[:,:,::-1].copy()
