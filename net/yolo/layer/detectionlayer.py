@@ -71,7 +71,7 @@ class DetectionLayer(torch.nn.Module):
         self.default_xy=torch.cat([x_grid,y_grid],dim=3) # [side,side,num,2]
     
     def convert_features(self,b_x):
-        r"""Convert the net out to proper format
+        r"""Convert the net out to proper format and shape...
         Args:
             b_x (tensor[float32]): [b,f]
         Return:
@@ -141,7 +141,7 @@ class DetectionLayer(torch.nn.Module):
             if self.training:
                 loss (tensor[float32]): the loss of it...
             else:
-                res (list[(pred_boxes,pred_labels,pred_confs),...])
+                res (list[(pred_boxes,pred_labels,pred_confs),...]): [b]
         """
         if self.training:
             b_x,b_fixed_boxes,\
@@ -156,6 +156,7 @@ class DetectionLayer(torch.nn.Module):
             img_h=ref_darknet.net_height
             img_w=ref_darknet.net_width
 
+            # for loss
             loss=[]
             for idx_batch,(out_loc,out_conf,out_cls,pred_loc,
                     fixed_boxes, # [box_num,4]
@@ -252,8 +253,10 @@ class DetectionLayer(torch.nn.Module):
             # print(ref_darknet)
             # exit(0)
         else:
-            b_x,b_src_img_size=args
-            _,_,_,b_pred_loc,default_xy=self.convert_features(b_x)
+            b_x=args
+            _,b_out_conf,b_out_cls,b_pred_loc,_=self.convert_features(b_x)
             
-            raise NotImplementedError()
+            return [(pred_boxes,pred_clses,pred_confs) for\
+                pred_boxes,pred_clses,pred_confs in\
+                zip(b_pred_loc,b_out_cls,b_out_conf)]
     
