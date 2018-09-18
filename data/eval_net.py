@@ -74,34 +74,32 @@ def eval_net(net,num=cfg.eval_number,shuffle=False):
             b_img_src_size=b_img_src_size.cuda(did)
         
         detect_res=net(b_img,b_img_src_size)
-        pred_box,pred_class,pred_prob=None,None,None
+        for (pbox,plabel,pprob),fixed_boxes,fixed_labels,fixed_diffs,real_box_num\
+            in zip(detect_res,b_fixed_boxes,b_fixed_labels,b_fixed_diffs,b_real_box_num):
+            
+            gt_box=fixed_boxes[:real_box_num][None]
+            label=fixed_labels[:real_box_num][None]
+            diff=fixed_diffs[:real_box_num][None]
 
-        assert 0, "you must implement the batch version!"
+            gt_box=gt_box.numpy()
 
-        prob_mask=pred_prob>cfg.out_thruth_thresh
-        pbox=pred_box[prob_mask ] 
-        plabel=pred_class[prob_mask ].long()
-        pprob=pred_prob[prob_mask]
+            if len(gt_box)!=0:
+                # print(gt_box.shape)
+                gt_box=gt_box[:,:,[1,0,3,2]] # change `xyxy` to `yxyx` 
+            gt_bboxes += list(gt_box )
+            gt_labels += list(label.numpy())
+            gt_difficults += list(diff.numpy().astype('bool'))
 
-        gt_box=gt_box.numpy()
+            pbox=pbox.cpu().detach().numpy()
+            if len(pbox)!=0:
+                pbox=pbox[:,[1,0,3,2]] # change `xyxy` to `yxyx`
+            pred_bboxes+=[pbox]
+            pred_classes+=[plabel.cpu().numpy()]
+            pred_scores+=[pprob.cpu().detach().numpy()]
 
-        if len(gt_box)!=0:
-            # print(gt_box.shape)
-            gt_box=gt_box[:,:,[1,0,3,2]] # change `xyxy` to `yxyx` 
-        gt_bboxes += list(gt_box )
-        gt_labels += list(label.numpy())
-        gt_difficults += list(diff.numpy().astype('bool'))
-
-        pbox=pbox.cpu().detach().numpy()
-        if len(pbox)!=0:
-            pbox=pbox[:,[1,0,3,2]] # change `xyxy` to `yxyx`
-        pred_bboxes+=[pbox]
-        pred_classes+=[plabel.cpu().numpy()]
-        pred_scores+=[pprob.cpu().detach().numpy()]
-
-        # pred_bboxes+=[np.empty(0) ]
-        # pred_classes+=[np.empty(0) ]
-        # pred_scores+=[np.empty(0) ]
+            # pred_bboxes+=[np.empty(0) ]
+            # pred_classes+=[np.empty(0) ]
+            # pred_scores+=[np.empty(0) ]
 
     res=voc_eval(pred_bboxes,pred_classes,pred_scores,
         gt_bboxes,gt_labels,gt_difficults,use_07_metric=True)

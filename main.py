@@ -95,10 +95,10 @@ def train():
     print(eval_net(net=net))
 
 def test_net():
-    data_set=TrainDataset()
+    classes=TrainDataset.classes
+    net=Darknet('./net/yolo/cfg/yolo.cfg','./models/extraction.weights')
+    net._print()
 
-    classes=data_set.classes
-    net=SSD(len(classes)+1)
     _,_,last_time_model=get_check_point()
     # assign directly
     # last_time_model='./weights/weights_21_110242'
@@ -117,18 +117,13 @@ def test_net():
     img_src=read_image('./data/img/dog.jpg')
     w,h=img_src.size
 
-    img=TestTransform(img_src,torch.tensor([[0,0,1,1]]).float()) # [c,h,w]
+    img=TestTransform(img_src,torch.tensor([[0,0,1,1]]).float(),(net.net_width,net.net_height)) # [c,h,w]
     img=img[None]
 
     if is_cuda:
         net.cuda(did)
         img=img.cuda(did)
-    boxes,labels,probs=net.predict(img,torch.tensor([[w,h]]).type_as(img))[0]
-
-    prob_mask=probs>cfg.out_thruth_thresh
-    boxes=boxes[prob_mask ] 
-    labels=labels[prob_mask ].long()
-    probs=probs[prob_mask]
+    boxes,labels,probs=net(img,torch.tensor([[w,h]]).type_as(img))[0]
 
     img_src=np.array(img_src) # [h,w,3] 'RGB'
     # change to 'BGR'
