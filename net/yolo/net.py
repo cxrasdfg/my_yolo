@@ -5,7 +5,9 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 import numpy as np
+from libs import pth_nms as ext_nms
 from .net_tool import *
+
 from .layer import Conv2dLocalLayer,DetectionLayer,\
     LinearLayer,RouteLayer,ShortcutLayer,\
     UpsampleLayer,YoloLayer,Conv2dLayer
@@ -372,8 +374,36 @@ class Darknet(nn.Module):
                 else:
                     x=module(x)
                 output.append('detection output, take a place')
+                
                 res.append(x)
                 
+                # at final, merge all the detection layer
+                assert idx>=len(self.layers)-1
+                if idx>=len(self.layers)-1:
+                    res_boxes=torch.empty(0).type_as(x)
+                    res_clses=torch.empty(0).type_as(x)
+                    res_confs=torch.empty(0).type_as(x)
+
+                    for b_pred_boxes,\
+                        b_pred_clses,\
+                        b_pred_confs in\
+                        res:
+                        res_boxes=torch.cat([res_boxes,b_pred_boxes],dim=1) # [b,n'+n,4]
+                        res_clses=torch.cat([res_clses,b_pred_clses],dim=1) # [b,n'+n,20]
+                        res_confs=torch.cat([res_confs,b_pred_confs],dim=1) # [b,n'+n]
+                    
+                    # for each sample in batch
+                    for pred_boxes,\
+                        pred_clses,\
+                        pred_confs in\
+                        zip(res_boxes,res_clses,res_confs):
+                        # filter the box
+                        conf_mask=pred_confs>.3
+                        pred_boxes=pred_boxes[conf_mask] # [n'',4]
+                        pred_clses=pred_clses[conf_mask] # [n'',classes]
+                        self.nms()
+
+                        
             else:
                 raise ValueError('unrecognized layer...')
 
@@ -383,6 +413,30 @@ class Darknet(nn.Module):
         if len(res) == 0:
             res=output[-1]
         return res
+    
+    def nms(self,rois,thresh=.7,filter_=1e-10):
+        """
+        nms to remove the duplication
+        input:
+            rois (tensor): [N,4+cls_num], attention that the location format is `xyxy`
+            thresh (float): the threshold for nms
+        return:
+            rois (tensor): [M,4+cls_num], regions after nms 
+        """
+        cls_num=rois.shape[1]-4
+        
+        for i in range(cls_num):
+            dets=rois[:,[0,1,2,3,i+4]]
+            order=ext_nms(dets,thresh=thresh)
+            mask=torch.full([len(dets)],1,dtype=torch.uint8)
+            mask[order]=0
+            del order
+            rois[:,i+4][mask]=0
+        
+        sorted_rois,_=rois[:,4:].max(dim=1)
+        rois=rois[sorted_rois>filter_] # [M,4+cls_num] 
+
+        return rois 
 
     def load_trained_weight(self,file_name):
         r"""This method will use the darknet pretrained weights,

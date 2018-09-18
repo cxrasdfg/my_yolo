@@ -141,7 +141,9 @@ class DetectionLayer(torch.nn.Module):
             if self.training:
                 loss (tensor[float32]): the loss of it...
             else:
-                res (list[(pred_boxes,pred_labels,pred_confs),...]): [b]
+                b_pred_loc (tensor[float32]): [b,side*side*num,4] 
+                b_out_cls (tensor[float32]): [b,side*side*num,20]
+                b_out_conf (tensor[float32]): [b,side*side*num]
         """
         if self.training:
             b_x,b_fixed_boxes,\
@@ -253,16 +255,20 @@ class DetectionLayer(torch.nn.Module):
             # print(ref_darknet)
             # exit(0)
         else:
-            b_x=args
+            b_x=args[0]
+            b,_=b_x.shape
             _,b_out_conf,b_out_cls,b_pred_loc,_=self.convert_features(b_x)
             
             # b_out_cls [b,side,side,classes], b_out_conf [b,side,side,num]
             b_out_cls=b_out_cls[...,None,:].expand(-1,-1,-1,self.num,-1)*\
                 b_out_conf[...,None].expand(-1,-1,-1,-1,self.classes)
+
+            b_out_cls,b_out_conf=\
+                b_out_cls.view(b,-1,self.classes),\
+                b_out_conf.view(b,-1)
             
-            return [(pred_boxes,
-                pred_clses,
-                pred_confs) for\
-                pred_boxes,pred_clses,pred_confs in\
-                zip(b_pred_loc,b_out_cls,b_out_conf)]
+            # from `ccwh` to `xyxy`
+            b_pred_loc=ccwh2xyxy(b_pred_loc.view(-1,4)).view(b,-1,4)
+            
+            return b_pred_loc,b_out_cls,b_out_conf
     
