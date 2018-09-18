@@ -6,6 +6,7 @@ import torch.nn as nn
 
 import numpy as np
 from libs import pth_nms as ext_nms
+from tqdm import tqdm
 from .net_tool import *
 
 from .layer import Conv2dLocalLayer,DetectionLayer,\
@@ -379,6 +380,8 @@ class Darknet(nn.Module):
                 
                 # at final, merge all the detection layer
                 if not self.training:
+                    filter_thresh=.5
+                    tqdm.write('INFO:filter_thresh=%.5f'%(filter_thresh))
                     assert idx>=len(self.layers)-1
                     if idx>=len(self.layers)-1:
                         res_boxes=torch.empty(0).type_as(output[-2])
@@ -401,7 +404,7 @@ class Darknet(nn.Module):
                             img_size in\
                             zip(res_boxes,res_clses,res_confs,b_img_src_size):
                             # filter the box
-                            conf_mask=pred_confs>.1
+                            conf_mask=pred_confs>filter_thresh
                             pred_boxes=pred_boxes[conf_mask] # [n'',4]
                             pred_clses=pred_clses[conf_mask] # [n'',classes]
                             
