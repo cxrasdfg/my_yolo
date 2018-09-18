@@ -256,7 +256,13 @@ class DetectionLayer(torch.nn.Module):
             b_x=args
             _,b_out_conf,b_out_cls,b_pred_loc,_=self.convert_features(b_x)
             
-            return [(pred_boxes,pred_clses,pred_confs) for\
+            # b_out_cls [b,side,side,classes], b_out_conf [b,side,side,num]
+            b_out_cls=b_out_cls[...,None,:].expand(-1,-1,-1,self.num,-1)*\
+                b_out_conf[...,None].expand(-1,-1,-1,-1,self.classes)
+            
+            return [(pred_boxes,
+                pred_clses,
+                pred_confs) for\
                 pred_boxes,pred_clses,pred_confs in\
                 zip(b_pred_loc,b_out_cls,b_out_conf)]
     
