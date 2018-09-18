@@ -8,6 +8,7 @@ from config import cfg
 import os
 import re
 # from net import SSD as MyNet
+from net import Darknet
 from tqdm import tqdm
 
 def get_check_point():
@@ -26,17 +27,15 @@ def get_check_point():
     return epoch,iteration,base_dir+w
 
 
-def eval_net(net,num=cfg.eval_number,shuffle=False):
+def eval_net(net=None,num=cfg.eval_number,cfg_file='./net/yolo/cfg/yolo.cfg',shuffle=False):
+    
+   
     
     is_cuda=cfg.use_cuda
     did=cfg.device_id
 
     if net is None:
-        assert 0
-        data_set=TestDataset()
-        data_loader=DataLoader(data_set,batch_size=1,shuffle=shuffle,drop_last=False)
-        classes=data_set.classes
-        net=MyNet(len(classes)+1)
+        net=Darknet(cfg_file,None)        
         _,_,last_time_model=get_check_point()
 
         if os.path.exists(last_time_model):
@@ -48,7 +47,10 @@ def eval_net(net,num=cfg.eval_number,shuffle=False):
                 net.cuda(did)
         else:
             raise ValueError("no model existed...")
-
+    
+    data_set=TestDataset(net.net_width,net.net_height)    
+    data_loader=DataLoader(data_set,batch_size=4,shuffle=shuffle,drop_last=False)
+    
     net.eval()
    
     upper_bound=num
@@ -62,13 +64,13 @@ def eval_net(net,num=cfg.eval_number,shuffle=False):
 
     for i,(b_img,b_img_src_size,\
             b_fixed_boxes,b_fixed_labels,b_fixed_diffs,\
-            b_real_box_num) in tqdm(enumerate(data_loader)):
+            b_real_box_num) in zip(range(len(data_loader)),tqdm(data_loader)):
         # assert img.shape[0]==1
         
         if i> upper_bound:
             break
 
-        b_src_img_size=b_src_img_size.float()
+        b_img_src_size=b_img_src_size.float()
         if is_cuda:
             b_img=b_img.cuda(did)
             b_img_src_size=b_img_src_size.cuda(did)

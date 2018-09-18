@@ -184,10 +184,10 @@ class TestDataset(Dataset):
         # it will cost extra memory but i have no way...
         assert real_box_num<=self.MAX_BOX_NUM
         fixed_boxes=torch.full([self.MAX_BOX_NUM,4],-1).float()
-        fixed_boxes[:real_box_num]=boxes
+        fixed_boxes[:real_box_num]=torch.tensor(boxes).float()
 
         fixed_labels=torch.full([self.MAX_BOX_NUM],-999).long()
-        fixed_labels[:real_box_num]=labels
+        fixed_labels[:real_box_num]=torch.tensor(labels).long()
 
         fixed_diffs=torch.full([self.MAX_BOX_NUM],0).long()        
 
