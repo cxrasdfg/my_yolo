@@ -62,12 +62,14 @@ def eval_net(net=None,num=cfg.eval_number,cfg_file='./net/yolo/cfg/yolo.cfg',shu
     pred_classes=[]
     pred_scores=[]
 
+    data_iter_ =tqdm(data_loader)
     for i,(b_img,b_img_src_size,\
             b_fixed_boxes,b_fixed_labels,b_fixed_diffs,\
-            b_real_box_num) in zip(range(len(data_loader)),tqdm(data_loader)):
+            b_real_box_num) in zip(range(len(data_loader)),data_iter_):
         # assert img.shape[0]==1
         
         if i> upper_bound:
+            data_iter_.close()
             break
 
         b_img_src_size=b_img_src_size.float()
