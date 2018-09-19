@@ -253,11 +253,11 @@ class DetectionLayer(torch.nn.Module):
                     +self.noobject_scale*( ((out_conf-0)**2) [(1-one_obj_i_j_mask)] ).sum()\
                     + self.class_scale*( ((out_cls-gt_cls_assign)**2).sum(dim=2) [one_obj_i_mask]).sum()\
                     if not self.softmax \
-                    else self.class_scale*(-out_cls[gt_cls_assign.long()].log()).sum()
+                    else self.class_scale*(-out_cls[gt_cls_assign>0].log()).sum()
                 ]
                 
                 tqdm_show_conf.append(out_conf[one_obj_i_j_mask].mean().item())
-                tqdm_show_cls.append(out_cls[gt_cls_assign.long()].mean().item())
+                tqdm_show_cls.append(out_cls[gt_cls_assign>0].mean().item())
                 tqdm_show_iou.append(gt_iou_target[one_obj_i_j_mask].mean().item())
                 
             mean_func=lambda x:sum(x)/len(x)
