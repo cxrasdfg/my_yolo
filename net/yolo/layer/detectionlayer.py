@@ -254,13 +254,13 @@ class DetectionLayer(torch.nn.Module):
                     +self.class_scale*( ((out_cls-gt_cls_assign)**2).sum(dim=2) [one_obj_i_mask]).sum()
                 ]
                 
-                tqdm_show_conf.append(out_conf[one_obj_i_j_mask].max().item())
-                tqdm_show_cls.append(out_cls[gt_cls_assign.long()].max().item())
+                tqdm_show_conf.append(out_conf[one_obj_i_j_mask].mean().item())
+                tqdm_show_cls.append(out_cls[gt_cls_assign.long()].mean().item())
                 tqdm_show_iou.append(gt_iou_target[one_obj_i_j_mask].mean().item())
                 
             mean_func=lambda x:sum(x)/len(x)
-            tqdm.write("pos conf max:%.5f"%(mean_func(tqdm_show_conf)),end=' || ' )
-            tqdm.write('pos prob max:%.5f' % (mean_func(tqdm_show_cls) ),end=' || ')
+            tqdm.write("pos conf mean:%.5f"%(mean_func(tqdm_show_conf)),end=' || ' )
+            tqdm.write('pos prob mean:%.5f' % (mean_func(tqdm_show_cls) ),end=' || ')
             tqdm.write("batch_idx:mean iou=%.5f"%(mean_func(tqdm_show_iou)),end=' || ')
             return sum(loss)/len(loss)
 
