@@ -97,6 +97,7 @@ def train():
         epoch+=1
 
     print(eval_net(net=net))
+    writer.close()
 
 def test_net():
     classes=TrainDataset.classes
