@@ -134,6 +134,8 @@ class DetectionLayer(torch.nn.Module):
                 b_fixed_labels (tensor[long]): [b,MAX_BOX_NUM]
                 b_real_box_num (tensor[long]): [b], number of real boxes in element of batch
                 ref_darknet: reference to the darknet, then we can get the gloabl hyperparams...
+                log_writter: tensorboardX summary writter
+                iteration (int): the number of iterations
             else:
                 b_x (tensor[float32]): [b,f]
                 b_src_img_size (tensor[float32]): [b,2], stores the original image width and height
@@ -149,7 +151,7 @@ class DetectionLayer(torch.nn.Module):
             b_x,b_fixed_boxes,\
             b_fixed_labels,\
             b_real_box_num,\
-            ref_darknet=args
+            ref_darknet,log_writer,iteration=args
             # continue?
             # self.side*self.side*(self.num*(self.coords+self.rescore)+self.classes)
             
@@ -264,7 +266,12 @@ class DetectionLayer(torch.nn.Module):
             tqdm.write("pos conf mean:%.5f"%(mean_func(tqdm_show_conf)),end=' || ' )
             tqdm.write('pos prob mean:%.5f' % (mean_func(tqdm_show_cls) ),end=' || ')
             tqdm.write("batch_idx:mean iou=%.5f"%(mean_func(tqdm_show_iou)),end=' || ')
-            return sum(loss)/len(loss)
+            
+            log_writer.add_scalar('Train/Mean of positive conf',mean_func(tqdm_show_conf),iteration)            
+            log_writer.add_scalar('Train/Mean of pos prob',mean_func(tqdm_show_cls),iteration)            
+            log_writer.add_scalar('Train/Mean of IOU',mean_func(tqdm_show_iou),iteration)                        
+            
+            return mean_func(loss)
 
             # print(ref_darknet)
             # exit(0)

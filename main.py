@@ -16,6 +16,7 @@ from data import TrainDataset,\
     read_image,TestTransform,\
     draw_bbox as draw_box,show_img
 from torch.utils.data import DataLoader
+from tensorboardX import SummaryWriter
 from tqdm import tqdm
 import sys
 import os
@@ -37,7 +38,8 @@ def adjust_lr(opt,iters,lrs=cfg.lrs):
 def train():
     net=Darknet('./net/yolo/cfg/yolo.cfg','./models/extraction.weights')
     net._print()
-    
+    writer = SummaryWriter('log')
+
     data_set=TrainDataset(net.net_width,net.net_height)
 
     data_loader=DataLoader(
@@ -75,9 +77,10 @@ def train():
                 b_labels=b_labels.cuda(did)
                 b_real_box_num=b_real_box_num.cuda(did)
 
-            _loss=net(b_imgs,b_boxes,b_labels,b_real_box_num)
+            _loss=net(b_imgs,b_boxes,b_labels,b_real_box_num,writer,iteration)
             _loss=net.opt_step(_loss)
-
+            
+            writer.add_scalar('Train/Loss',_loss,iteration)
             tqdm.write('Epoch:%d, iter:%d, loss:%.5f'%(epoch,iteration,_loss))
 
             iteration+=1
@@ -88,6 +91,7 @@ def train():
 
         if epoch % cfg.eval_per_epoch==0:
             _map= eval_net(net=net,num=100,shuffle=True)['map']
+            writer.add_scalar('Train/Eval',_map,iteration)            
             print("map:",_map)
             
         epoch+=1

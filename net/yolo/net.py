@@ -299,7 +299,7 @@ class Darknet(nn.Module):
         if self.training:
             x,b_fixed_boxes,\
             b_fixed_labels,\
-            b_real_box_num=args
+            b_real_box_num,log_writer,iteration=args
         else:
             x,b_img_src_size=args
             
@@ -371,7 +371,7 @@ class Darknet(nn.Module):
                 if self.training:
                     x=module(x,b_fixed_boxes,\
                         b_fixed_labels,\
-                        b_real_box_num,self)
+                        b_real_box_num,self,log_writer,iteration)
                 else:
                     x=module(x)
                 output.append('detection output, take a place')
