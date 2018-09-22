@@ -251,9 +251,9 @@ class DetectionLayer(torch.nn.Module):
 
                 loss+=[
                     self.coord_scale*( ((out_loc-gt_loc_target)**2).sum(dim=3) [one_obj_i_j_mask]).sum()\
-                    +self.object_scale*(-1*( ( (out_conf/(gt_iou_target.detach()+1e-6))[one_obj_i_j_mask] ).log()).sum())\
-                    +self.noobject_scale*(-1*(( (1-out_conf)[(1-one_obj_i_j_mask)] +1e-6).log())).sum()\
-                    + self.class_scale*( -1*( out_cls[(gt_cls_assign*one_obj_i_mask[...,None].expand_as(gt_cls_assign).type_as(out_cls) )>0]+1e-6).log().sum()+ -1*(1-out_cls[((1-gt_cls_assign)*one_obj_i_mask[...,None].expand_as(gt_cls_assign).float().type_as(out_cls))>0]+1e-6).log().sum() )\
+                    +self.object_scale*( ((out_conf-gt_iou_target.detach())**2) [one_obj_i_j_mask] ).sum()\
+                    +self.noobject_scale*.5*( ((out_conf-0)**2) [(1-one_obj_i_j_mask)] ).sum()\
+                    + self.class_scale*( ((out_cls-gt_cls_assign)**2).sum(dim=2) [one_obj_i_mask]).sum()\
                     if not self.softmax \
                     else self.class_scale*(-out_cls[gt_cls_assign>0].log()).sum()
                 ]
