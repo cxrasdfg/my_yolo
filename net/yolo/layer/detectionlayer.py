@@ -250,7 +250,7 @@ class DetectionLayer(torch.nn.Module):
                 one_obj_i_mask=gt_cell_asiign > 0 # [side,side]
 
                 loss+=[
-                    self.coord_scale*( ((out_loc-gt_loc_target)**2).sum(dim=3) [one_obj_i_j_mask]).sum()\
+                    self.coord_scale*2*( ((out_loc-gt_loc_target)**2).sum(dim=3) [one_obj_i_j_mask]).sum()\
                     +self.object_scale*( ((out_conf-gt_iou_target.detach())**2) [one_obj_i_j_mask] ).sum()\
                     +self.noobject_scale*.5*( ((out_conf-0)**2) [(1-one_obj_i_j_mask)] ).sum()\
                     + self.class_scale*( ((out_cls-gt_cls_assign)**2).sum(dim=2) [one_obj_i_mask]).sum()\
