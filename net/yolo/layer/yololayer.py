@@ -3,6 +3,8 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
+from torch.autograd import Variable
+import numpy as np 
 
 class YoloLayer(torch.nn.Module):
 
@@ -39,12 +41,16 @@ class YoloLayer(torch.nn.Module):
         truth=x[:,:,:,4:5]
         class_prob=x[:,:,:,5:]
 
-        coor_xy=F.sigmoid(coor_xy)
-        truth=F.sigmoid(truth)
-        class_prob=F.sigmoid(class_prob)
+        # coor_xy=F.sigmoid(coor_xy)
+        # truth=F.sigmoid(truth)
+        # class_prob=F.sigmoid(class_prob)
 
-        grid_x=Variable(torch.linspace(0,width-1,width).float()).cuda()
-        grid_y=Variable(torch.linspace(0,height-1,height).float()).cuda()
+        coor_xy=coor_xy.sigmoid()
+        truth=truth.sigmoid()
+        class_prob=class_prob.sigmoid()
+
+        grid_x=torch.linspace(0,width-1,width).cuda()
+        grid_y=torch.linspace(0,height-1,height).cuda()
 
         grid_x=grid_x.expand(
             [batch,m_anchor_num,height,width]
@@ -72,16 +78,16 @@ class YoloLayer(torch.nn.Module):
         # renormalize
         # coor_xy[:,:,:,0]/=width
         # coor_xy[:,:,:,1]/=height
-        coor_xy/=NP2Variable(np.array([int(width),int(height)]))
+        coor_xy/=torch.tensor([int(width),int(height)]).type_as(coor_xy)
 
         #anchor
-        m_anchor=np.array(self.masked_anchor,dtype=np.float32)
+        m_anchor=torch.tensor(self.masked_anchor).type_as(coor_xy)
 
         # normalization
         m_anchor[:,0]/=net_width
         m_anchor[:,1]/=net_height
 
-        m_anchor=NP2Variable(m_anchor)
+        # m_anchor=NP2Variable(m_anchor)
         m_anchor=m_anchor.expand(
             [batch,m_anchor_num,2]
         ).contiguous().view(

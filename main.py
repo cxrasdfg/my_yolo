@@ -142,7 +142,37 @@ def test_net():
         )
     show_img(img_src,-1)
 
+
+
+def test_v3():
+    from net.yolo.net_tool import LoadImgForward,draw_box,nms_batch_yolov3
+    from datetime import datetime
+    import timeit
+    print('This is the ugly implementation of yolov3...')
+    img_path = './net/yolo/data/dog.jpg'
+    bs = Darknet('./net/yolo/cfg/yolov3.cfg', './net/yolo/yolov3.weights')
+    bs.eval()
+    bs.cuda()
+    test_x = LoadImgForward(img_path, (bs.net_height, bs.net_width))
+
+
+    n=500
+    print('---------------speed test begin--------------')
+    _start_time=timeit.default_timer()
+
+    for _ in range(n):
+        test_y = bs(test_x,None)
+        bboxes=nms_batch_yolov3(test_y)
+
+        # for boxes in bboxes:
+        #     draw_box(img_path, boxes, './net/yolo/data/coco.names')
+    ms_elapse=timeit.default_timer() - _start_time
+    print('total time: {} s | average run time：{} s\n'.format( ms_elapse,ms_elapse/n ))
+
 if __name__ == '__main__':
+    test_v3()
+    exit()
+    # deprecate the following codes just now...
     if len(sys.argv)==1:
         opt='train'
     else:

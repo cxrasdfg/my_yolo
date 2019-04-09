@@ -1,19 +1,20 @@
 # coding=utf-8
+# author=theppsh
 
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 
 import numpy as np
-from libs import pth_nms as ext_nms
+# from libs import pth_nms as ext_nms
 from tqdm import tqdm
 from .net_tool import *
+from .cfgparser import  ParserCfg
 
 from .layer import Conv2dLocalLayer,DetectionLayer,\
     LinearLayer,RouteLayer,ShortcutLayer,\
     UpsampleLayer,YoloLayer,Conv2dLayer
 
-from .parser import ParserCfg
 from collections import OrderedDict
 
 def cal_hw(im_size,kernel,stride,pad):
@@ -698,20 +699,29 @@ if __name__ == '__main__':
     bs.cuda()
     test_x = LoadImgForward(img_path, (bs.net_height, bs.net_width))
 
-    test_y = bs(test_x)
+    test_y = bs(test_x,None)
 
-    con_y = None
-    for y in test_y:
-        if con_y is None:
-            con_y = y
-        else:
-            con_y = torch.cat([con_y, y], dim=2)
+    # con_y = None
+    # for y in test_y:
+    #     if con_y is None:
+    #         con_y = y
+    #     else:
+    #         con_y = torch.cat([con_y, y], dim=2)
 
-    final_batch_boxes = []
-    batch_boxes = GetBoxFromNetOutput(con_y)  # batch x (m_anchor_num * width * height) x (4 + 1 + classes)
-    for boxes in batch_boxes:
-        temp = nms_sort(boxes)  # num1 x (4 + 1 + classes)
-        temp = GetBoxesForShow(temp)  # num2 x (4 + class_id)
-        final_batch_boxes.append(temp)
+    bboxes=nms_batch_yolov3(test_y)
+    for boxes in bboxes:
+        # temp = GetBoxesForShow(temp)  # num2 x (4 + class_id)
+        # final_batch_boxes.append(temp)
+        draw_box(img_path, boxes, './data/coco.names')
 
-        DrawBoxOnImg(img_path, temp, './data/coco.names')
+
+    # con_y=torch.cat(test_y,dim=2)
+
+    # final_batch_boxes = []
+    # batch_boxes = GetBoxFromNetOutput(con_y)  # batch x (m_anchor_num * width * height) x (4 + 1 + classes)
+    # for boxes in batch_boxes:
+    #     temp = nms_sort(boxes)  # num1 x (4 + 1 + classes)
+    #     temp = GetBoxesForShow(temp)  # num2 x (4 + class_id)
+    #     final_batch_boxes.append(temp)
+
+    #     DrawBoxOnImg(img_path, temp, './data/coco.names')
